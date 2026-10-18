@@ -64,3 +64,48 @@ spent first and the rest is re-allocated against the real reading.**
 |---|---|---|---|---|---|
 | 2026-10-18 | repo + venv setup (local) | — | 0.00 | 90.00 | Repo skeleton, enforcement tests, recovered pipeline committed. No credit touched. |
 | 2026-10-18 | push to GitHub (local) | — | 0.00 | 90.00 | bigari92/market-monitor created PRIVATE and pushed. Remote tree and full history verified free of personal data. Preconditions 1 of 3 cleared; 2 unknown, 3 pending a turn boundary. No credit touched. |
+| 2026-10-18 | **first cloud session** — feed probe + tracker build | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Four commits on `main-grop3y`. |
+
+## C0 — the burn-rate calibration, and the one thing it could not do
+
+C0's purpose was to "prove the mechanism — repo, venv, incremental commits, tests green — and
+read the actual consumption". The mechanism is proven. **The consumption is not readable from
+inside the session, and this is a finding C0 was supposed to produce.**
+
+A cloud session has no access to its own billing. It cannot see a dollar figure, a token count,
+or a remaining balance, so rule 7 — "append what was spent before the session ends" — cannot be
+satisfied by the session alone. The honest entry is a blank with a pointer, not a guess, and an
+invented figure would be worse than a blank because it would be carried forward as fact.
+
+**The owner closes this loop**, by reading the actual spend from the Claude console and replacing
+the row above. Until then no package below should be planned against a per-session cost.
+
+What *is* measurable from inside, as a proxy for the next session's planner:
+
+| | |
+|---|---|
+| Wall-clock, end to end | ~35 minutes |
+| Full 7,161-ticker price sweeps | 2 (149s and 150s), ~1.1 GB fetched, 0 failures |
+| 24-month replay over the cached panel | 1, ~90s |
+| Test suite runs | 6 (12 tests at start → 62 at end) |
+| Commits pushed | 4 |
+| **Data cost** | **USD 0.00 — every source used is free** |
+
+### What this session actually did against the plan
+
+It was not a trivial session, so it did not stay inside C0's USD 5 shape. The brief directed it
+to settle the feed question first and then build the tracker, which is a larger job than a
+calibration run. Recorded as an overrun rather than quietly re-scoped: if the owner's console
+shows this cost materially more than USD 5, **the C1–C5 allocations below are still provisional
+and should be re-cut against the real reading before C1 is authorised.**
+
+The work does, however, remove cost from two later packages:
+
+- **C1 (as-filed fundamentals, USD 20)** is now cheaper and de-risked: the SEC Financial
+  Statement Data Sets were measured at 60 MB in 1.2 s from this environment, and the universe
+  already carries the CIK, so the ticker-matching step C1 assumed is gone.
+- **C3 (survivorship bound, USD 15)** is narrower than written: the *forward* tracking record is
+  survivorship-bias-free by construction, so C3 is now only about rehabilitating the historical
+  backtest, which is a separable question the tracker does not depend on.
+
+Neither saving is booked until someone measures it.
