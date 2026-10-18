@@ -146,17 +146,24 @@ but it changes what the record means, so it is recorded per run in `runs.csv`.
 
 1. **Let the record accumulate.** It is one run long. Its entire value is in the second run and
    after, and nothing substitutes for elapsed time.
-2. **Fundamentals from the SEC Financial Statement Data Sets.** Measured at 60 MB in 1.2s from
-   this environment, as-filed with a real filing date per row — the route CLOUD-RULES.md §4
-   requires instead of the restatement-contaminated `frames` API. The universe already carries
-   the CIK, so the join needs no ticker matching. This is what would let the fundamental
-   exclusion block (`algo_v4`'s `FUND_W`) come back, and the owner's own research says the
-   fundamentals pay off as an exclusion rather than a tilt.
+2. ~~**Fundamentals from the SEC Financial Statement Data Sets.**~~ **Done** —
+   `results/fundamentals_build.md` and `results/fundamentals_modes.md`. 413,516 point-in-time
+   rows over 14,995 CIKs, as-filed with real filing dates, joined on CIK. The measured answer:
+   **the fundamentals do not improve selection and the signal stays price-only**, confirming
+   `screen_v4.py`'s decision on a strictly harder dataset (no restated values, no 90-day
+   lookahead). They are carried as **context** in the run report — `rule40`, margins, revenue
+   growth and instability beside each name — plus the SIC sector mix, none of it scored.
 3. **Read `results/factor_redundancy.md` and decide nothing in a hurry.** It answers
    RECOVERY.md's open question and finds a tighter redundancy that no review had looked at. Any
    change to the weight vector is a new configuration and belongs in the trials ledger that the
    block bootstrap (C2) is meant to score against.
-4. **Sector/industry data, if concentration matters.** The current top 25 is visibly
-   semiconductor-heavy, and `screen_v4.py`'s industry overlay — omitted here because its data
-   source is unreachable from the cloud (see §2 of the feed probe) — was partly what managed
-   that. SIC codes are available in the SEC datasets from item 2.
+4. ~~**Sector/industry data.**~~ **Done** — SIC comes free in the SEC filings and the run
+   report now states the watchlist's industry mix. It confirms the concentration: **6 of the
+   top 25 share SIC 3674 (semiconductors)**, and on a broader reading 13 of 25 are
+   semiconductors or the equipment serving them. Reported, not scored —
+   `screen_v4.py`'s industry-momentum *overlay* stays omitted and `signal_version` still
+   hashes `industry_overlay: false`, because turning it on would change the signal.
+
+5. **A cost model.** RECOVERY.md defect 4 is the last one still fully open, and it is the thing
+   that would let a net-of-cost question be answered at all — including whether the monthly
+   cadence's turnover is affordable (`results/horizon_test.md` §6 can only speak gross).
