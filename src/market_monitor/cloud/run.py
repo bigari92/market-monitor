@@ -66,6 +66,29 @@ def _load(feed_name: str, years: int, refresh: bool, limit: int | None):
     return uni, bars, stats, keep
 
 
+def _fundamental_context(universe_frame: pd.DataFrame, as_of: str) -> pd.DataFrame | None:
+    """Per-ticker fundamentals and sector knowable at `as_of`, indexed by ticker.
+
+    Returns None when the panel has not been built, so `track` works without it — the
+    fundamentals are context, and the tracker must not depend on them to produce a ranking.
+    """
+    panel_path = SEC_DIR / "fundamentals_panel.parquet"
+    if not panel_path.exists():
+        return None
+    from . import fundamentals as FU
+
+    panel = pd.read_parquet(panel_path)
+    visible = FU.as_of(panel, as_of)
+    if visible.empty:
+        return None
+    visible = FU.label_sectors(visible)
+
+    tickers = universe_frame[["ticker", "cik"]].dropna(subset=["cik"]).copy()
+    tickers["cik"] = tickers["cik"].astype("Int64")
+    merged = tickers.merge(visible, on="cik", how="left")
+    return merged.drop_duplicates(subset="ticker").set_index("ticker")
+
+
 def cmd_track(args: argparse.Namespace) -> int:
     uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
     as_of = _data_as_of(bars)
@@ -87,11 +110,24 @@ def cmd_track(args: argparse.Namespace) -> int:
         "feed": stats,
     }
 
+    # Fundamental and sector context, if the panel has been built. REPORTED, NOT SCORED:
+    # it is passed to `tracker.run` as `context`, which carries it into the record and the
+    # report, while `signal.score` sees only `factor_frame`. A change in fundamental coverage
+    # therefore cannot move a rank — `tests/test_tracker.py` holds that line directly.
+    context = _fundamental_context(uni, as_of)
+    if context is not None:
+        diagnostics["fundamental_context"] = {
+            "names_with_fundamentals": int(context["rule40"].notna().sum()),
+            "names_with_sector": int(context["sic_title"].notna().sum()),
+            "source": "SEC Financial Statement Data Sets, as-filed, real filing dates",
+            "scored": False,
+        }
+
     try:
         result = tracker.run(factor_frame, data_as_of=as_of, feed_name=args.feed,
                              panel_stats={"tickers": int(close.shape[1]),
                                           "sessions": int(close.shape[0])},
-                             dry_run=args.dry_run)
+                             dry_run=args.dry_run, context=context)
     except signal.RefusedToRank as exc:
         # A refusal is a result and gets written down, per CLOUD-RULES.md §6.
         verdict = (f"# Run refused — {as_of}\n\n"

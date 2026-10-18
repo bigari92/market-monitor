@@ -460,9 +460,11 @@ def render_report(result: RunResult, diagnostics: dict | None = None) -> str:
     if fundamental_columns:
         covered = int(watchlist["rule40"].notna().sum()) if "rule40" in watchlist else 0
         lines += ["## Fundamental context — reported, not scored", "",
-                  f"{covered} of {len(watchlist)} listed names have point-in-time fundamentals",
-                  "(as-filed, from the SEC Financial Statement Data Sets, dated by their real",
-                  "filing date). These values did **not** influence the ranking above:",
+                  f"{covered} of {len(watchlist)} listed names have a usable `rule40` — the",
+                  "variable the recovered exclusion rule keys on. As-filed, from the SEC",
+                  "Financial Statement Data Sets, dated by their real filing date. A name can",
+                  "have a filing row but no `rule40` if its operating-margin tag is absent.",
+                  "These values did **not** influence the ranking above:",
                   "`screen_v4.py` found fundamentals \"did not improve selection, so they are",
                   "reported, not scored\", and that decision stands.", "",
                   "| ticker | rule40 | op margin | rev YoY (TTM) | rev instability |",
