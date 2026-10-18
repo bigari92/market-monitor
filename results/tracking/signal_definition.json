@@ -1,0 +1,26 @@
+{
+  "signal_version": "383a5e2a568e",
+  "price_w": {
+    "adv_3m_usd_log": 0.75,
+    "days_above_ma200": 0.5,
+    "max_dd_12m": 1.0,
+    "mom36_healthy": 0.75,
+    "mom36_overext": -0.75,
+    "mom_12_1": 0.5,
+    "pct_of_52w_high": 1.0,
+    "skew_12m": -0.75
+  },
+  "min_price": 5.0,
+  "min_adv": 5000000.0,
+  "vol_gate": [
+    0.8,
+    1.0
+  ],
+  "top_n": 25,
+  "mode": "price_only",
+  "omitted": [
+    "fundamental_block (SEC datasets not built)",
+    "industry_overlay (nasdaq screener unavailable from cloud)"
+  ],
+  "never_emitted": "probability, expected return, or any performance figure"
+}

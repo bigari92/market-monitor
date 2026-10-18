@@ -32,13 +32,34 @@ recovered/   the Sept-2026 research pipeline, recovered verbatim from a session
              See RECOVERY.md. Code recovered is not result validated.
 src/market_monitor/
   cloud/     modules a cloud session may run. No yfinance, no personal data.
+    feeds/   price providers behind one protocol: yahoo_chart (free, measured),
+             sharadar (paid, survivorship-bias-free, priced but not wired up)
+    universe.py  US-listed universe from SEC's ticker/exchange map (+ CIK)
+    prices.py    the panel cache; refuses stale and empty panels
+    factors.py   point-in-time factors, ported from recovered/factors.py
+    signal.py    algo_v4 price composite; ranks, refuses, never states a chance
+    tracker.py   the append-only record of what was said and when
+    run.py       CLI: track | universe | probe | replay
   local/     modules that run only on the owner's machine. yfinance allowed here.
 tests/       the enforcement tests above, plus unit tests
 tools/       pre-commit hook and the transcript extractor
 results/     written verdicts from gates (committed; they are the evidence trail)
-docs/        CLOUD-RULES.md, CREDIT-LEDGER.md, RECOVERY.md
+  tracking/  THE PRODUCT: the live append-only record
+  replay/    mechanical validation over past dates. NOT a backtest.
+docs/        CLOUD-RULES.md, CREDIT-LEDGER.md, RECOVERY.md, TRACKER.md
 data/        NOT committed. Raw downloads and the price panel live here.
 ```
+
+## The tracker
+
+`docs/TRACKER.md` is the design doc. One run of
+`python -m market_monitor.cloud.run track` scans ~7,000 US-listed names and emits BUY candidates,
+EXIT signals for anything previously listed, and the append-only tracking state that is the
+actual product. It displays no probability and no performance figure, for measured reasons given
+there.
+
+The feed question — whether a market-wide panel can be built from a cloud session at all — was
+measured before anything was built on it: `results/price_feed_probe.md`.
 
 ## Setup
 

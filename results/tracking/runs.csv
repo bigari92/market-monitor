@@ -1,0 +1,2 @@
+run_id,run_timestamp_utc,data_as_of,signal_version,feed,top_n,rank_decay_buffer,universe_in,after_hard_filters,after_vol_gate,watchlist_size,entered,exited,held,panel_tickers,panel_sessions,is_first_run
+2026-10-16_383a5e2a568e,2026-10-18T16:32:01+00:00,2026-10-16,383a5e2a568e,yahoo_chart,25,50,5790,2697,540,25,25,0,0,6936,1255,True
