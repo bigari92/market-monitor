@@ -1,0 +1,29 @@
+{
+  "lag": {
+    "n": 412593,
+    "mean_days": 97.0,
+    "median_days": 44,
+    "p05": 28,
+    "p25": 37,
+    "p75": 60,
+    "p90": 402,
+    "p95": 411,
+    "p99": 543,
+    "share_within_90d_%": 83.35,
+    "share_beyond_90d_%": 16.65,
+    "max_days": 1000
+  },
+  "panel_rows": 413516,
+  "panel_ciks": 14995,
+  "q4_rows_derived": 66717,
+  "quarterly_rows": 374783,
+  "rows_with_rev_ttm": 258422,
+  "universe_ciks": 5924,
+  "universe_with_fundamentals": 4254,
+  "gated_cohort": 540,
+  "gated_with_fundamentals": 471,
+  "top25_missing": [
+    "UMC",
+    "TGB"
+  ]
+}

@@ -30,6 +30,8 @@ this module's job is to make the measurement possible.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -275,3 +277,45 @@ def coverage_profile(panel: pd.DataFrame) -> pd.DataFrame:
                                           "rev_stability")}}),
         include_groups=False)
     return rows
+
+
+# --- SIC labels: the sector dimension the cloud previously had no source for ---
+
+SIC_REFERENCE = Path(__file__).resolve().parent / "reference" / "sic_codes.csv"
+
+
+def sic_labels() -> pd.DataFrame:
+    """SEC's own SIC code list: [sic, office, title], 444 codes.
+
+    Committed as package reference data rather than fetched at runtime. It is small, it changes
+    about never, and a ranking run should not depend on a web page being up — the Imperva
+    failure in `results/price_feed_probe.md` is what that dependency looks like when it breaks.
+    Regenerate from
+    https://www.sec.gov/search-filings/standard-industrial-classification-sic-code-list
+    """
+    frame = pd.read_csv(SIC_REFERENCE)
+    frame["sic"] = frame["sic"].astype("Int64")
+    return frame
+
+
+def label_sectors(frame: pd.DataFrame, sic_column: str = "sic") -> pd.DataFrame:
+    """Attach `sic_title` and `sic_office` to anything carrying a SIC code."""
+    labels = sic_labels().rename(columns={"title": "sic_title", "office": "sic_office"})
+    out = frame.copy()
+    out[sic_column] = pd.to_numeric(out[sic_column], errors="coerce").astype("Int64")
+    return out.merge(labels, left_on=sic_column, right_on="sic", how="left",
+                     suffixes=("", "_ref"))
+
+
+def sector_mix(frame: pd.DataFrame, top: int = 8) -> pd.DataFrame:
+    """Count of names by SIC title. The concentration check the tracker could not make before.
+
+    `recovered/screen_v4.py` reported an industry mix from a Nasdaq screener download this
+    environment cannot reach, so the live tracker has been shipping a visibly
+    semiconductor-heavy top 25 with no way to say so in its own output. This says it.
+    """
+    if "sic_title" not in frame.columns or frame.empty:
+        return pd.DataFrame(columns=["names", "share_%"])
+    counts = frame["sic_title"].fillna("(unknown)").value_counts().head(top)
+    return pd.DataFrame({"names": counts,
+                         "share_%": (100 * counts / len(frame)).round(1)})

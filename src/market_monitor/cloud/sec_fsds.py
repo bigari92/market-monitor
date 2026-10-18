@@ -250,7 +250,13 @@ def harvest(dest_dir: Path, quarter_labels: list[str] | None = None,
 
     if not collected:
         raise RuntimeError("no quarter yielded any facts; the dataset or its URL changed")
-    facts = pd.concat(collected, ignore_index=True)
+    # Empty frames are dropped before concat: 2009q1 contains zero 10-K/10-Q submissions (the
+    # XBRL mandate had not begun), and concatenating an all-NA frame makes pandas warn about
+    # future dtype behaviour rather than simply ignoring it.
+    non_empty = [frame for frame in collected if not frame.empty]
+    if not non_empty:
+        raise RuntimeError("every quarter filtered to zero rows; check the exclusion filters")
+    facts = pd.concat(non_empty, ignore_index=True)
     facts.attrs["missing_quarters"] = missing
     facts.attrs["zip_sizes"] = sizes
     return facts
