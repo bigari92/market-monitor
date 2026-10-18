@@ -1,0 +1,24 @@
+# Pinned exactly, for one specific reason beyond reproducibility: yfinance's price-repair
+# logic changed in 1.7.0, 1.6.0 and several 1.5.x releases, so an unpinned upgrade silently
+# rewrites historical prices and moves a backtest number with no code change anyone authored.
+# These versions match the global interpreter the Sept-2026 research ran on.
+#
+# Install into the venv OUTSIDE OneDrive, never the global interpreter (that one runs the
+# owner's nine Alcor scheduled tasks and must not be disturbed):
+#   C:/Users/valer/.venvs/market-monitor/Scripts/python.exe -m pip install -r requirements.txt
+
+pandas==2.3.3
+numpy==2.3.4
+pyarrow==24.0.0
+duckdb==1.5.3
+requests==2.32.5
+
+# Local-only. Must never appear on a cloud import path — see tests/test_no_yfinance_in_cloud_paths.py
+yfinance==1.7.0
+
+pytest==9.1.1
+
+# Added at Stage 3 (the statistical attack), not before:
+#   scipy==1.17.1
+#   statsmodels==0.14.6     # Newey-West standard errors
+#   alphalens-reloaded      # factor diagnostics; the only library worth adopting

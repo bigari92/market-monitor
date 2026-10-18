@@ -1,0 +1,9 @@
+# Normalise line endings so golden-file tests do not flap between a local
+# Windows run and a Linux cloud session. Without this, the same ranking
+# committed from two machines differs by \r on every line and the one test
+# that notices "the output changed and nobody meant it to" becomes noise.
+* text=auto eol=lf
+
+# Keep expected-output fixtures byte-exact.
+tests/fixtures/** -text
+*.parquet binary

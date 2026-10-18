@@ -1,0 +1,20 @@
+[project]
+name = "market-monitor"
+version = "0.1.0"
+description = "Public-data half of a personal market monitoring tool"
+requires-python = ">=3.14"
+
+[tool.pytest]
+# pytest 9 native TOML types. Do not also add a [tool.pytest.ini_options] table —
+# pytest refuses to start when both are present.
+#
+# Collect ONLY from tests/. Without this, pytest tries to import
+# recovered/horizon_test.py — its name matches the default `*_test.py` discovery
+# pattern — and the collection fails on an import the recovered code needs but this
+# venv deliberately does not have yet (scipy arrives at Stage 3).
+#
+# recovered/ is evidence, never a test suite and never imported. See docs/RECOVERY.md.
+testpaths = ["tests"]
+norecursedirs = ["recovered", "data", ".venv", "docs", "results"]
+addopts = ["-q", "--strict-markers"]
+pythonpath = ["src"]

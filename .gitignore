@@ -1,0 +1,49 @@
+# --- Personal financial data: NEVER in this repository -----------------------
+# This repo is cloud-session-enabled and may become a GitHub remote. The owner's
+# financial records live in C:\Users\valer\Investing and must never arrive here,
+# not even as a stray copy. These are basename patterns, so they match at any depth.
+# Enforcement is NOT this file alone: see tests/test_no_personal_data.py and
+# tools/pre-commit, because .gitignore does not stop `git add -f` or a file that
+# is already tracked.
+trade-journal.csv
+holdings.json
+funding-log.csv
+tax-record.csv
+ledger_*.csv
+nbu_rates.csv
+flex-*.xml
+*flex*.xml
+secrets.env
+.env
+
+# --- Bulk data: too large to commit, and re-derivable ------------------------
+# A 15-year daily panel for ~8,000 names is 0.5-0.7 GB in parquet. GitHub rejects
+# files over 100 MiB and LFS free bandwidth (~10 GiB/month) is exhausted by ~20
+# clones. Raw data is downloaded, never committed; only small derived artefacts
+# (year-partitioned monthly factor panels, 5-13 MB) may be committed deliberately.
+data/
+*.parquet
+*.zip
+*.gz
+
+# --- Environment -------------------------------------------------------------
+# The venv lives OUTSIDE OneDrive at C:\Users\valer\.venvs\market-monitor so that
+# thousands of site-packages files are not sync-churned. If one is ever created
+# here by accident, it stays untracked.
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# --- Editor / OS -------------------------------------------------------------
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
+
+# Recovered from the same transcript but EXCLUDED: it embeds verbatim passages of the
+# owner private plan.md (sleeve sizes, contributions, declaration wording). Not pipeline
+# code. Lives at C:/Users/valer/Investing/fix_tax_language.py instead.
+fix_tax_language.py

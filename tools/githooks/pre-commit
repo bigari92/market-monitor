@@ -1,0 +1,54 @@
+#!/bin/sh
+# Blocks the commit itself, which is the layer .gitignore cannot provide: it does not
+# stop `git add -f`, and it does nothing about a file that is already tracked.
+#
+# Installed by:  git config core.hooksPath tools/githooks
+# (Version-controlled on purpose, so a fresh clone gets it with one command.)
+
+fail=0
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# --- 1. Personal financial records ------------------------------------------
+for path in $staged; do
+  base=$(basename "$path" | tr '[:upper:]' '[:lower:]')
+  case "$base" in
+    trade-journal.csv|holdings.json|funding-log.csv|tax-record.csv|nbu_rates.csv|secrets.env|.env)
+      echo "BLOCKED: $path is a personal financial record and must not enter this repository."
+      fail=1 ;;
+    ledger_*.csv|flex-*.xml|*flex*.xml|*.pbix)
+      echo "BLOCKED: $path matches a personal-data pattern."
+      fail=1 ;;
+  esac
+done
+
+# --- 2. Anything under data/ -------------------------------------------------
+for path in $staged; do
+  case "$path" in
+    data/*)
+      echo "BLOCKED: $path is under data/, which is raw or re-derivable and not committed."
+      fail=1 ;;
+  esac
+done
+
+# --- 3. Large files ----------------------------------------------------------
+# 50 MiB. GitHub warns here and rejects at 100 MiB; LFS is not a fix (free-tier
+# bandwidth is exhausted by ~20 clones, after which clones serve pointers).
+limit=$((50 * 1024 * 1024))
+for path in $staged; do
+  [ -f "$path" ] || continue
+  size=$(wc -c < "$path" | tr -d ' ')
+  if [ "$size" -gt "$limit" ]; then
+    echo "BLOCKED: $path is $((size / 1048576)) MiB, over the 50 MiB limit."
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "Commit refused. To override deliberately: git commit --no-verify"
+  echo "Think twice: a push publishes every commit, not just the tip."
+  exit 1
+fi
+exit 0
