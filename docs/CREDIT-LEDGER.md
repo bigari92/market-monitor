@@ -10,9 +10,10 @@ Every dollar is accounted here against a named package or a named defect.
 | | |
 |---|---|
 | Repo exists locally | **yes** — first commit 2026-10-18, 52 files, clean tree |
-| Pushed to GitHub | **pending** — needs `gh auth login`, which only the owner can run |
-| Cloud availability | `available: false`, reason `no_readable_git_checkout` (re-probed after the first commit) |
-| Cloud environment confirmed | **unknown** — a second precondition, separate from the repo |
+| Pushed to GitHub | **yes** — `bigari92/market-monitor`, PRIVATE, default branch `main`, 2026-10-18 |
+| Published content verified clean | **yes** — the remote tree (52 blobs) and *every* commit were scanned for personal filenames; none present, largest blob 9.5 KB. A push publishes all commits, not just the tip, so the history scan is the one that matters |
+| Cloud availability | still `no_readable_git_checkout` immediately after the push, for the reason in precondition 3 below. The session was then pointed at this folder; that move takes effect at the end of the turn, so the decisive probe happens on the next one |
+| Cloud environment confirmed | **still unknown.** The availability response reports only the first blocking reason, so `no_readable_git_checkout` masks whether an environment exists at all. It becomes visible once precondition 3 is satisfied |
 
 ### Three preconditions, not one
 
@@ -62,3 +63,4 @@ spent first and the rest is re-allocated against the real reading.**
 | Date | Session | Package | USD | Balance | Outcome |
 |---|---|---|---|---|---|
 | 2026-10-18 | repo + venv setup (local) | — | 0.00 | 90.00 | Repo skeleton, enforcement tests, recovered pipeline committed. No credit touched. |
+| 2026-10-18 | push to GitHub (local) | — | 0.00 | 90.00 | bigari92/market-monitor created PRIVATE and pushed. Remote tree and full history verified free of personal data. Preconditions 1 of 3 cleared; 2 unknown, 3 pending a turn boundary. No credit touched. |
