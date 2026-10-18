@@ -61,6 +61,30 @@ PRICE_W: dict[str, float] = {
     "skew_12m": -0.75,
 }
 
+# The fundamental block from `recovered/algo_v4.py`, ported verbatim and NOT enabled by default.
+#
+# Weights are proportional to measured residual IC from `orthogonality.py`
+# (0.099 / 0.065 / 0.057 / 0.038) rather than chosen, which is why they are not round numbers.
+# `recovered/screen_v4.py` — the production screen, written after the comparison — ran price-only
+# and attached fundamentals "for CONTEXT ... they did not improve selection, so they are
+# reported, not scored". That decision stands here: `MODES` exists so the four configurations
+# `recovered/run_algo_v4.py` compared can be re-measured on new data, not so a session can pick
+# whichever looks best. Switching the live signal is the owner's call.
+FUND_W: dict[str, float] = {
+    "rev_instability": -1.0,
+    "r40_healthy": 0.65,
+    "net_margin_c": 0.55,
+    "profitable": 0.40,
+}
+
+R40_LO, R40_HI = -0.5, 0.6
+# Exclusion thresholds from the recovered bucket tables: the buckets where P(-30%) > 45%.
+EXCL_R40 = -1.0
+EXCL_INSTAB = 0.80
+
+# The four configurations compared in `recovered/run_algo_v4.py`, by its own names.
+MODES = ("price", "rank_fund", "filter", "both")
+
 MIN_PRICE: float = 5.0
 MIN_ADV: float = 5_000_000.0
 
@@ -73,6 +97,7 @@ VOL_GATE: tuple[float, float] = (0.80, 1.00)
 # percentile rank to mean anything, and the run declines to produce a ranking.
 MIN_AFTER_HARD_FILTERS = 50
 MIN_AFTER_GATE = 40
+MIN_AFTER_EXCLUSION = 30     # algo_v4's floor after the fundamental exclusion
 
 TOP_N = 25
 
@@ -112,7 +137,11 @@ def cs_rank(series: pd.Series) -> pd.Series:
 
 
 def _derive(frame: pd.DataFrame) -> pd.DataFrame:
-    """The derived columns from `algo_v4._derive`, price block only."""
+    """The derived columns from `algo_v4._derive`.
+
+    The fundamental derivations run only when `rule40` is present, exactly as recovered — so a
+    cross-section with no fundamentals attached behaves identically to the price-only path.
+    """
     d = frame.copy()
     d["adv_3m_usd_log"] = np.log(d["adv_3m_usd"].clip(lower=1))
     m36 = d["mom_36"].fillna(0.0)
@@ -120,7 +149,26 @@ def _derive(frame: pd.DataFrame) -> pd.DataFrame:
     # The overextension penalty only engages above +300% over three years; below that the
     # clip makes the term identically zero.
     d["mom36_overext"] = np.log1p(m36.clip(lower=3.0)) - np.log1p(3.0)
+    if "rule40" in d.columns:
+        d["r40_healthy"] = d["rule40"].clip(lower=R40_LO, upper=R40_HI)
+        d["rev_instability"] = np.log1p(d["rev_stability"].clip(lower=0))
+        d["net_margin_c"] = d["net_margin"]
     return d
+
+
+def apply_fundamental_exclusion(frame: pd.DataFrame) -> pd.DataFrame:
+    """Drop the names the recovered bucket tables put in a P(-30%) > 45% bucket.
+
+    This is the half of the fundamental block the owner's research actually supports: the
+    information is concentrated in avoiding a bad tail, not in ranking the good end, which
+    argues for an exclusion rather than a tilt. Thresholds are `EXCL_R40` and `EXCL_INSTAB`,
+    unchanged.
+    """
+    if "rule40" not in frame.columns:
+        return frame
+    bad = ((frame["rule40"] < EXCL_R40)
+           | (np.log1p(frame["rev_stability"].clip(lower=0)) > np.log1p(EXCL_INSTAB)))
+    return frame[~bad.fillna(False)]
 
 
 def apply_gates(factors: pd.DataFrame, vol_gate: tuple[float, float] = VOL_GATE) -> pd.DataFrame:
@@ -147,21 +195,46 @@ def apply_gates(factors: pd.DataFrame, vol_gate: tuple[float, float] = VOL_GATE)
     return d
 
 
-def score(factors: pd.DataFrame, vol_gate: tuple[float, float] = VOL_GATE) -> pd.DataFrame:
+def score(factors: pd.DataFrame, vol_gate: tuple[float, float] = VOL_GATE,
+          mode: str = "price") -> pd.DataFrame:
     """Rank the cross-section. Returns every gated name with its score and rank, best first.
 
     The returned frame carries one column per weighted term holding that term's *rank
     contribution*, so the reason a name ranks where it does is readable off the row rather than
     inferred. That is what makes a past call auditable.
+
+    `mode` selects one of `recovered/run_algo_v4.py`'s four configurations. **It defaults to
+    "price", which is what the production screen ran and what the live tracker uses.** The other
+    three require fundamentals joined onto `factors` and exist to be measured, not to be chosen
+    by a session.
     """
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
+
     gated = apply_gates(factors, vol_gate)
+    if mode in ("filter", "both"):
+        gated = apply_fundamental_exclusion(gated)
+        if len(gated) < MIN_AFTER_EXCLUSION:
+            raise RefusedToRank(
+                f"only {len(gated)} names survived the fundamental exclusion "
+                f"(floor {MIN_AFTER_EXCLUSION}). Refusing to rank."
+            )
     d = _derive(gated)
+
+    weights = dict(PRICE_W)
+    if mode in ("rank_fund", "both"):
+        weights.update(FUND_W)
 
     total = pd.Series(0.0, index=d.index)
     contributions: dict[str, pd.Series] = {}
-    for name, weight in PRICE_W.items():
+    for name, weight in weights.items():
         if name not in d.columns:
-            raise AssertionError(f"the signal needs factor {name!r} and it is absent")
+            if name in PRICE_W:
+                raise AssertionError(f"the signal needs price factor {name!r} and it is absent")
+            # A fundamental term with no data contributes nothing, as recovered (`continue`).
+            # Silent for the fundamental block only, where a missing column is a join miss
+            # rather than a broken panel.
+            continue
         # Rank among the names that have the factor; a NaN contributes exactly zero, as recovered.
         ranked = cs_rank(d[name].dropna())
         aligned = pd.Series(0.0, index=d.index)
@@ -203,12 +276,12 @@ def why_it_ranks(row: pd.Series, top_k: int = 4) -> str:
     return "; ".join(parts)
 
 
-def signal_version() -> str:
-    """A short hash of the signal *definition*.
+def _definition(mode: str = "price") -> dict:
+    """The dict the version hash covers.
 
-    Every output is stamped with it. Two runs that disagree are then either a market change or a
-    definition change, and the hash says which without anyone having to remember. Any edit to a
-    weight, a threshold, the gate, or the factor list moves the hash.
+    For `mode="price"` this is byte-identical to what it was before the other three modes
+    existed, so the live record's `383a5e2a568e` keeps its meaning. Adding a capability must not
+    retroactively change the identity of runs that did not use it.
     """
     definition = {
         "price_w": dict(sorted(PRICE_W.items())),
@@ -218,30 +291,55 @@ def signal_version() -> str:
         "min_after_hard_filters": MIN_AFTER_HARD_FILTERS,
         "min_after_gate": MIN_AFTER_GATE,
         "rank_transform": "cs_rank:(rank_pct-0.5)*2",
-        "mode": "price_only",
-        "fundamental_block": False,
+        "mode": "price_only" if mode == "price" else mode,
+        "fundamental_block": mode != "price",
         "industry_overlay": False,
         "mom36_nan_fill": 0.0,
         "source": "recovered/algo_v4.py@PRICE_W",
     }
-    blob = json.dumps(definition, sort_keys=True, separators=(",", ":"))
+    if mode != "price":
+        definition["fund_w"] = dict(sorted(FUND_W.items()))
+        definition["excl_r40"] = EXCL_R40
+        definition["excl_instab"] = EXCL_INSTAB
+        definition["r40_clip"] = [R40_LO, R40_HI]
+        definition["min_after_exclusion"] = MIN_AFTER_EXCLUSION
+    return definition
+
+
+def signal_version(mode: str = "price") -> str:
+    """A short hash of the signal *definition*.
+
+    Every output is stamped with it. Two runs that disagree are then either a market change or a
+    definition change, and the hash says which without anyone having to remember. Any edit to a
+    weight, a threshold, the gate, or the factor list moves the hash — and so does the mode, so
+    a price-only run can never be confused with a fundamentals run.
+    """
+    blob = json.dumps(_definition(mode), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
 
 
-def signal_definition() -> dict:
+def signal_definition(mode: str = "price") -> dict:
     """The definition the hash covers, for writing beside a run."""
-    return {
-        "signal_version": signal_version(),
+    out = {
+        "signal_version": signal_version(mode),
         "price_w": dict(sorted(PRICE_W.items())),
         "min_price": MIN_PRICE,
         "min_adv": MIN_ADV,
         "vol_gate": list(VOL_GATE),
         "top_n": TOP_N,
-        "mode": "price_only",
-        "omitted": ["fundamental_block (SEC datasets not built)",
-                    "industry_overlay (nasdaq screener unavailable from cloud)"],
+        "mode": "price_only" if mode == "price" else mode,
         "never_emitted": "probability, expected return, or any performance figure",
     }
+    if mode == "price":
+        out["omitted"] = [
+            "fundamental_block (ported in signal.FUND_W; NOT scored — screen_v4.py ran "
+            "price-only because fundamentals 'did not improve selection')",
+            "industry_overlay (nasdaq screener unavailable from cloud)",
+        ]
+    else:
+        out["fund_w"] = dict(sorted(FUND_W.items()))
+        out["exclusion"] = {"excl_r40": EXCL_R40, "excl_instab": EXCL_INSTAB}
+    return out
 
 
 def factor_diagnostics(factors: pd.DataFrame) -> dict:

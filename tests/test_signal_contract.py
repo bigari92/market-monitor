@@ -135,3 +135,61 @@ def test_contributions_sum_to_the_score():
     scored = sig.score(synthetic_cross_section())
     contributions = scored[[c for c in scored.columns if c.startswith("c_")]].sum(axis=1)
     pd.testing.assert_series_equal(contributions, scored["score"], check_names=False)
+
+
+# --- the fundamental block: ported, measurable, and NOT on by default -----
+
+
+def test_the_live_signal_version_is_pinned():
+    """The committed tracking record is stamped `383a5e2a568e`. If a later edit moves the
+    price-mode hash, every past row silently changes meaning -- the record would claim to have
+    been produced by a definition that no longer exists. Adding a capability (the fundamental
+    modes) must not do that, so the price-mode hash is pinned here."""
+    assert sig.signal_version("price") == "383a5e2a568e"
+    assert sig.signal_version() == sig.signal_version("price"), "price must be the default"
+
+
+def test_each_mode_has_its_own_version():
+    """A price-only run can never be confused with a fundamentals run."""
+    versions = {mode: sig.signal_version(mode) for mode in sig.MODES}
+    assert len(set(versions.values())) == len(sig.MODES)
+
+
+def test_fundamental_weights_are_the_recovered_values():
+    """Weights proportional to measured residual IC (0.099/0.065/0.057/0.038), not chosen.
+    CLOUD-RULES.md §5: a session does not re-weight."""
+    assert sig.FUND_W == {"rev_instability": -1.0, "r40_healthy": 0.65,
+                          "net_margin_c": 0.55, "profitable": 0.40}
+    assert (sig.EXCL_R40, sig.EXCL_INSTAB) == (-1.0, 0.80)
+    assert (sig.R40_LO, sig.R40_HI) == (-0.5, 0.6)
+
+
+def test_a_cross_section_without_fundamentals_scores_identically_in_every_mode():
+    """The fundamental derivations are gated on `rule40` being present, as recovered. So a
+    panel with no fundamentals joined must not change behaviour by mode -- otherwise a join
+    miss would quietly alter the ranking instead of being visible as a join miss."""
+    frame = synthetic_cross_section(n=600)
+    baseline = sig.score(frame, mode="price")
+    for mode in sig.MODES:
+        other = sig.score(frame, mode=mode)
+        pd.testing.assert_series_equal(baseline["score"], other["score"])
+
+
+def test_the_exclusion_drops_the_buckets_it_is_meant_to():
+    frame = synthetic_cross_section(n=600)
+    rng = np.random.default_rng(3)
+    frame["rule40"] = rng.uniform(-0.3, 0.5, len(frame))
+    frame["rev_stability"] = rng.uniform(0.0, 0.3, len(frame))
+    frame["net_margin"] = rng.uniform(-0.2, 0.3, len(frame))
+    # Two names placed squarely in the excluded buckets.
+    frame.loc[frame.index[0], "rule40"] = -2.0          # below EXCL_R40
+    frame.loc[frame.index[1], "rev_stability"] = 5.0    # above EXCL_INSTAB
+
+    kept = sig.score(frame, mode="filter")
+    assert frame.index[0] not in kept.index
+    assert frame.index[1] not in kept.index
+
+
+def test_an_unknown_mode_is_rejected():
+    with pytest.raises(ValueError, match="mode must be one of"):
+        sig.score(synthetic_cross_section(), mode="whatever_looks_best")

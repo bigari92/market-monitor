@@ -238,6 +238,79 @@ def cmd_horizon(args: argparse.Namespace) -> int:
     return 0
 
 
+SEC_DIR = Path(__file__).resolve().parents[3] / "data" / "sec"
+
+
+def cmd_fundamentals(args: argparse.Namespace) -> int:
+    """Harvest the SEC Financial Statement Data Sets and build the point-in-time panel.
+
+    ~70 quarterly zips, 60-95 MB each, stream-filtered to the ~7% of rows that matter. Each zip
+    is deleted after filtering, so peak disk is one quarter rather than ~5 GB.
+    """
+    from . import fundamentals as FU
+    from . import sec_fsds as S
+
+    SEC_DIR.mkdir(parents=True, exist_ok=True)
+    facts_path = SEC_DIR / "fsds_facts_pit.parquet"
+
+    if facts_path.exists() and not args.refetch:
+        facts = pd.read_parquet(facts_path)
+        print(f"facts from cache: {len(facts):,} rows", flush=True)
+    else:
+        labels = S.quarters()
+        print(f"harvesting {len(labels)} quarters: {labels[0]} .. {labels[-1]}", flush=True)
+        raw = S.harvest(SEC_DIR / "zips", labels, keep_zips=False)
+        print(f"\nraw facts {len(raw):,}", flush=True)
+        print("restatement rate:", json.dumps(S.restatement_rate(raw), indent=2), flush=True)
+        raw.to_parquet(SEC_DIR / "fsds_facts_raw.parquet")
+        facts = S.as_originally_filed(raw)
+        facts.to_parquet(facts_path)
+        print(f"as-originally-filed {len(facts):,}", flush=True)
+
+    panel = FU.attach_sic(FU.build_panel(facts), facts)
+    panel.to_parquet(SEC_DIR / "fundamentals_panel.parquet")
+    print(f"\npanel: {len(panel):,} rows, {panel['cik'].nunique():,} CIKs, "
+          f"{panel['period_end'].min().date()} .. {panel['period_end'].max().date()}", flush=True)
+    print("\nfiling lag (what LAG_DAYS=90 approximated):", flush=True)
+    print(json.dumps(FU.filing_lag_profile(panel), indent=2), flush=True)
+    print("\ncoverage by year (non-null %):", flush=True)
+    print(FU.coverage_profile(panel).to_string(), flush=True)
+    print("\nThe written verdict is results/fundamentals_build.md.", flush=True)
+    return 0
+
+
+def cmd_modes(args: argparse.Namespace) -> int:
+    """Measure the four pre-specified algo_v4 configurations. Does NOT change the live signal."""
+    from . import mode_test
+
+    panel_path = SEC_DIR / "fundamentals_panel.parquet"
+    if not panel_path.exists():
+        print("no fundamental panel; run `fundamentals` first", flush=True)
+        return 1
+    fundamental_panel = pd.read_parquet(panel_path)
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    cik_by_ticker = {t: int(c) for t, c in zip(uni["ticker"], uni["cik"]) if pd.notna(c)}
+    per_date, coverage = mode_test.run(bars.close[keep], bars.adjclose[keep],
+                                       bars.volume[keep], fundamental_panel, cik_by_ticker)
+
+    summary = mode_test.summarise(per_date)
+    print("\n=== the four pre-specified configurations ===", flush=True)
+    print(summary.round(3).to_string(), flush=True)
+    print("\n=== paired against price-only, same dates ===", flush=True)
+    for mode in ("rank_fund", "filter", "both"):
+        print(json.dumps(mode_test.paired_difference(per_date, mode), indent=2), flush=True)
+    print(f"\nfundamental join coverage: median {coverage['with_rule40'].median():.0f} of "
+          f"{coverage['gated'].median():.0f} gated names", flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    per_date.to_csv(RESULTS / "mode_test_by_date.csv", index=False)
+    summary.to_csv(RESULTS / "mode_test_summary.csv")
+    print("\nThe live signal is unchanged and stays on price-only. "
+          "The written verdict is results/fundamentals_modes.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -286,6 +359,17 @@ def main(argv: list[str] | None = None) -> int:
         "horizon", help="rank IC and tail behaviour at 3m vs 12m (needs --years 20)")
     horizon_cmd.add_argument("--refresh", action="store_true")
     horizon_cmd.set_defaults(func=cmd_horizon)
+
+    fund = sub.add_parser(
+        "fundamentals", help="harvest SEC Financial Statement Data Sets, build the PIT panel")
+    fund.add_argument("--refetch", action="store_true",
+                      help="re-download every quarter instead of using the cached facts")
+    fund.set_defaults(func=cmd_fundamentals, refresh=False)
+
+    modes = sub.add_parser(
+        "modes", help="measure the 4 pre-specified algo_v4 configs (does NOT change the signal)")
+    modes.add_argument("--refresh", action="store_true")
+    modes.set_defaults(func=cmd_modes)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)
