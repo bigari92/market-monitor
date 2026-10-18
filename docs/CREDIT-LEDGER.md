@@ -64,7 +64,7 @@ spent first and the rest is re-allocated against the real reading.**
 |---|---|---|---|---|---|
 | 2026-10-18 | repo + venv setup (local) | — | 0.00 | 90.00 | Repo skeleton, enforcement tests, recovered pipeline committed. No credit touched. |
 | 2026-10-18 | push to GitHub (local) | — | 0.00 | 90.00 | bigari92/market-monitor created PRIVATE and pushed. Remote tree and full history verified free of personal data. Preconditions 1 of 3 cleared; 2 unknown, 3 pending a turn boundary. No credit touched. |
-| 2026-10-18 | **first cloud session** — feed probe + tracker build | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Four commits on `main-grop3y`. |
+| 2026-10-18 | **first cloud session** — feed probe + tracker build + horizon test | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Cadence settled by measurement, not judgement: `results/horizon_test.md`. Six commits on `main-grop3y`. |
 
 ## C0 — the burn-rate calibration, and the one thing it could not do
 
@@ -84,11 +84,14 @@ What *is* measurable from inside, as a proxy for the next session's planner:
 
 | | |
 |---|---|
-| Wall-clock, end to end | ~35 minutes |
-| Full 7,161-ticker price sweeps | 2 (149s and 150s), ~1.1 GB fetched, 0 failures |
+| Wall-clock, end to end | ~2h 15m |
+| Full-universe price sweeps | 3 — two 5-year (149s, 150s) and one 20-year (179s). ~2 GB fetched, **0 failures across 21,477 requests** |
 | 24-month replay over the cached panel | 1, ~90s |
-| Test suite runs | 6 (12 tests at start → 62 at end) |
-| Commits pushed | 4 |
+| Horizon test: 190 rebalance dates scored at two horizons | 1, ~6 min |
+| Test suite runs | 16 (12 tests at start → 99 at end) |
+| Commits pushed | 9 |
+| Peak disk for the cached panel | 270 MB price panel + 63 MB SEC facts (gitignored) |
+| SEC Financial Statement Data Sets | 70 quarterly zips, ~5 GB downloaded, stream-filtered and deleted; 3.37M facts kept |
 | **Data cost** | **USD 0.00 — every source used is free** |
 
 ### What this session actually did against the plan
@@ -101,9 +104,10 @@ and should be re-cut against the real reading before C1 is authorised.**
 
 The work does, however, remove cost from two later packages:
 
-- **C1 (as-filed fundamentals, USD 20)** is now cheaper and de-risked: the SEC Financial
-  Statement Data Sets were measured at 60 MB in 1.2 s from this environment, and the universe
-  already carries the CIK, so the ticker-matching step C1 assumed is gone.
+- **C1 (as-filed fundamentals, USD 20)** is **done, inside this session, for USD 0 of data
+  cost.** 413,516 point-in-time rows over 14,995 CIKs from the SEC Financial Statement Data
+  Sets, as-filed with real filing dates, joined on CIK. See `results/fundamentals_build.md`.
+  C1's USD 20 is therefore released back to the unallocated balance, not spent.
 - **C3 (survivorship bound, USD 15)** is narrower than written: the *forward* tracking record is
   survivorship-bias-free by construction, so C3 is now only about rehabilitating the historical
   backtest, which is a separable question the tracker does not depend on.

@@ -23,7 +23,13 @@ from . import prices, signal, tracker, universe
 from .feeds import FeedError, get_feed
 
 DEFAULT_FEED = "yahoo_chart"
-DEFAULT_YEARS = 5
+
+# 20 years, not 5. The horizon test needs this depth to have any independent observations at all
+# (results/horizon_test.md), and one cached panel serving every command beats two. It costs
+# nothing in accuracy for `track`: the 2026-10-16 ranking is bit-identical on the 5-year and
+# 20-year panels, which is the point-in-time property confirmed on real data rather than only in
+# tests. Do NOT reach for `range=max` to go deeper -- see MAX_MEDIAN_GAP_DAYS in the Yahoo feed.
+DEFAULT_YEARS = 20
 RESULTS = Path(__file__).resolve().parents[3] / "results"
 
 
@@ -44,18 +50,43 @@ def _load(feed_name: str, years: int, refresh: bool, limit: int | None):
     # The cache key needs an as-of date, but the as-of date comes from the panel. Resolve by
     # probing the cache for the most recent panel this feed has written, and falling back to a
     # fetch when there is none.
-    cached = prices.cached_as_of_dates(feed_name)
+    # Keyed by span as well as date, so a 5-year and a 20-year panel cannot be confused.
+    cached = prices.cached_as_of_dates(feed_name, years=years)
     if cached and not refresh:
         bars, stats = prices.load_or_fetch(feed, tickers, cached[-1], years, refresh=False)
     else:
         bars = feed.fetch(tickers, years=years)
         stats = dict(getattr(feed, "stats", {}) or {})
-        prices.write_panel(bars, _data_as_of(bars), feed.name, stats=stats)
+        prices.write_panel(bars, prices.panel_key(_data_as_of(bars), years), feed.name,
+                           stats=stats)
         print(f"panel written: {bars.summary()}", flush=True)
 
     uni = universe.refine_universe(uni, bars.meta)
     keep = [t for t in uni["ticker"] if t in bars.close.columns]
     return uni, bars, stats, keep
+
+
+def _fundamental_context(universe_frame: pd.DataFrame, as_of: str) -> pd.DataFrame | None:
+    """Per-ticker fundamentals and sector knowable at `as_of`, indexed by ticker.
+
+    Returns None when the panel has not been built, so `track` works without it — the
+    fundamentals are context, and the tracker must not depend on them to produce a ranking.
+    """
+    panel_path = SEC_DIR / "fundamentals_panel.parquet"
+    if not panel_path.exists():
+        return None
+    from . import fundamentals as FU
+
+    panel = pd.read_parquet(panel_path)
+    visible = FU.as_of(panel, as_of)
+    if visible.empty:
+        return None
+    visible = FU.label_sectors(visible)
+
+    tickers = universe_frame[["ticker", "cik"]].dropna(subset=["cik"]).copy()
+    tickers["cik"] = tickers["cik"].astype("Int64")
+    merged = tickers.merge(visible, on="cik", how="left")
+    return merged.drop_duplicates(subset="ticker").set_index("ticker")
 
 
 def cmd_track(args: argparse.Namespace) -> int:
@@ -79,11 +110,24 @@ def cmd_track(args: argparse.Namespace) -> int:
         "feed": stats,
     }
 
+    # Fundamental and sector context, if the panel has been built. REPORTED, NOT SCORED:
+    # it is passed to `tracker.run` as `context`, which carries it into the record and the
+    # report, while `signal.score` sees only `factor_frame`. A change in fundamental coverage
+    # therefore cannot move a rank — `tests/test_tracker.py` holds that line directly.
+    context = _fundamental_context(uni, as_of)
+    if context is not None:
+        diagnostics["fundamental_context"] = {
+            "names_with_fundamentals": int(context["rule40"].notna().sum()),
+            "names_with_sector": int(context["sic_title"].notna().sum()),
+            "source": "SEC Financial Statement Data Sets, as-filed, real filing dates",
+            "scored": False,
+        }
+
     try:
         result = tracker.run(factor_frame, data_as_of=as_of, feed_name=args.feed,
                              panel_stats={"tickers": int(close.shape[1]),
                                           "sessions": int(close.shape[0])},
-                             dry_run=args.dry_run)
+                             dry_run=args.dry_run, context=context)
     except signal.RefusedToRank as exc:
         # A refusal is a result and gets written down, per CLOUD-RULES.md §6.
         verdict = (f"# Run refused — {as_of}\n\n"
@@ -183,6 +227,126 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_horizon(args: argparse.Namespace) -> int:
+    """Measure the signal's rank IC and tail behaviour at 3 and 12 months.
+
+    Needs a long panel — the default 5 years leaves ~12 monthly rebalance dates once history and
+    forward-return room are taken out, which cannot settle anything. Use `--years 20`.
+    """
+    from . import horizon as H
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    close, adjclose, volume = bars.close[keep], bars.adjclose[keep], bars.volume[keep]
+    print(f"{len(keep)} names, {close.shape[0]} sessions from {close.index.min().date()}",
+          flush=True)
+
+    out = H.run(close, adjclose, volume)
+    print(f"\npanel {out['panel_rows']:,} rows over {out['n_dates']} dates "
+          f"({out['first_date']} .. {out['last_date']})", flush=True)
+    print("\nbase rates (gated cohort):", flush=True)
+    print(out["base_rates"].round(2).to_string(index=False), flush=True)
+    print("\nrank IC:", flush=True)
+    print(out["ic"].round(4).to_string(index=False), flush=True)
+
+    selection = out["selection"]
+    rows = []
+    for label in ("3m", "12m"):
+        rows.append({
+            "horizon": label,
+            "top_mean_%": 100 * selection[f"top_mean_{label}"].mean(),
+            "cohort_mean_%": 100 * selection[f"cohort_mean_{label}"].mean(),
+            "top_up50_%": 100 * selection[f"top_up50_{label}"].mean(),
+            "cohort_up50_%": 100 * selection[f"cohort_up50_{label}"].mean(),
+            "top_dn30_%": 100 * selection[f"top_dn30_{label}"].mean(),
+            "cohort_dn30_%": 100 * selection[f"cohort_dn30_{label}"].mean(),
+        })
+    table = pd.DataFrame(rows)
+    table["up_tail_lift_x"] = table["top_up50_%"] / table["cohort_up50_%"]
+    table["dn_tail_cut_x"] = table["cohort_dn30_%"] / table["top_dn30_%"]
+    print(f"\ntop-{out['top_n']} vs cohort:", flush=True)
+    print(table.round(2).to_string(index=False), flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    selection.to_csv(RESULTS / "horizon_selection_by_date.csv", index=False)
+    out["ic"].to_csv(RESULTS / "horizon_ic.csv", index=False)
+    print(f"\nwrote {RESULTS / 'horizon_ic.csv'} and horizon_selection_by_date.csv", flush=True)
+    print("The written verdict is results/horizon_test.md.", flush=True)
+    return 0
+
+
+SEC_DIR = Path(__file__).resolve().parents[3] / "data" / "sec"
+
+
+def cmd_fundamentals(args: argparse.Namespace) -> int:
+    """Harvest the SEC Financial Statement Data Sets and build the point-in-time panel.
+
+    ~70 quarterly zips, 60-95 MB each, stream-filtered to the ~7% of rows that matter. Each zip
+    is deleted after filtering, so peak disk is one quarter rather than ~5 GB.
+    """
+    from . import fundamentals as FU
+    from . import sec_fsds as S
+
+    SEC_DIR.mkdir(parents=True, exist_ok=True)
+    facts_path = SEC_DIR / "fsds_facts_pit.parquet"
+
+    if facts_path.exists() and not args.refetch:
+        facts = pd.read_parquet(facts_path)
+        print(f"facts from cache: {len(facts):,} rows", flush=True)
+    else:
+        labels = S.quarters()
+        print(f"harvesting {len(labels)} quarters: {labels[0]} .. {labels[-1]}", flush=True)
+        raw = S.harvest(SEC_DIR / "zips", labels, keep_zips=False)
+        print(f"\nraw facts {len(raw):,}", flush=True)
+        print("restatement rate:", json.dumps(S.restatement_rate(raw), indent=2), flush=True)
+        raw.to_parquet(SEC_DIR / "fsds_facts_raw.parquet")
+        facts = S.as_originally_filed(raw)
+        facts.to_parquet(facts_path)
+        print(f"as-originally-filed {len(facts):,}", flush=True)
+
+    panel = FU.attach_sic(FU.build_panel(facts), facts)
+    panel.to_parquet(SEC_DIR / "fundamentals_panel.parquet")
+    print(f"\npanel: {len(panel):,} rows, {panel['cik'].nunique():,} CIKs, "
+          f"{panel['period_end'].min().date()} .. {panel['period_end'].max().date()}", flush=True)
+    print("\nfiling lag (what LAG_DAYS=90 approximated):", flush=True)
+    print(json.dumps(FU.filing_lag_profile(panel), indent=2), flush=True)
+    print("\ncoverage by year (non-null %):", flush=True)
+    print(FU.coverage_profile(panel).to_string(), flush=True)
+    print("\nThe written verdict is results/fundamentals_build.md.", flush=True)
+    return 0
+
+
+def cmd_modes(args: argparse.Namespace) -> int:
+    """Measure the four pre-specified algo_v4 configurations. Does NOT change the live signal."""
+    from . import mode_test
+
+    panel_path = SEC_DIR / "fundamentals_panel.parquet"
+    if not panel_path.exists():
+        print("no fundamental panel; run `fundamentals` first", flush=True)
+        return 1
+    fundamental_panel = pd.read_parquet(panel_path)
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    cik_by_ticker = {t: int(c) for t, c in zip(uni["ticker"], uni["cik"]) if pd.notna(c)}
+    per_date, coverage = mode_test.run(bars.close[keep], bars.adjclose[keep],
+                                       bars.volume[keep], fundamental_panel, cik_by_ticker)
+
+    summary = mode_test.summarise(per_date)
+    print("\n=== the four pre-specified configurations ===", flush=True)
+    print(summary.round(3).to_string(), flush=True)
+    print("\n=== paired against price-only, same dates ===", flush=True)
+    for mode in ("rank_fund", "filter", "both"):
+        print(json.dumps(mode_test.paired_difference(per_date, mode), indent=2), flush=True)
+    print(f"\nfundamental join coverage: median {coverage['with_rule40'].median():.0f} of "
+          f"{coverage['gated'].median():.0f} gated names", flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    per_date.to_csv(RESULTS / "mode_test_by_date.csv", index=False)
+    summary.to_csv(RESULTS / "mode_test_summary.csv")
+    print("\nThe live signal is unchanged and stays on price-only. "
+          "The written verdict is results/fundamentals_modes.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -226,6 +390,22 @@ def main(argv: list[str] | None = None) -> int:
     replay.add_argument("--months", type=int, default=12)
     replay.add_argument("--refresh", action="store_true")
     replay.set_defaults(func=cmd_replay)
+
+    horizon_cmd = sub.add_parser(
+        "horizon", help="rank IC and tail behaviour at 3m vs 12m (needs --years 20)")
+    horizon_cmd.add_argument("--refresh", action="store_true")
+    horizon_cmd.set_defaults(func=cmd_horizon)
+
+    fund = sub.add_parser(
+        "fundamentals", help="harvest SEC Financial Statement Data Sets, build the PIT panel")
+    fund.add_argument("--refetch", action="store_true",
+                      help="re-download every quarter instead of using the cached facts")
+    fund.set_defaults(func=cmd_fundamentals, refresh=False)
+
+    modes = sub.add_parser(
+        "modes", help="measure the 4 pre-specified algo_v4 configs (does NOT change the signal)")
+    modes.add_argument("--refresh", action="store_true")
+    modes.set_defaults(func=cmd_modes)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)

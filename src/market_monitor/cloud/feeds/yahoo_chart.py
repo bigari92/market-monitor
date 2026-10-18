@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 import requests
 
-from . import Bars, FeedEmptyError, FeedThrottledError
+from . import Bars, FeedEmptyError, FeedError, FeedThrottledError
 
 CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
 
@@ -49,6 +49,22 @@ DEFAULT_WORKERS = 8
 # Stop the run at this many 429s. Low on purpose — the point is to notice a throttle and stop,
 # not to characterise it.
 THROTTLE_LIMIT = 5
+
+# A daily series should have a median gap of 1 day, or 3 across a weekend. Anything beyond this
+# is not daily data, whatever was requested.
+#
+# This guard exists because `range=max` IS A TRAP. Asked for `range=max&interval=1d`, the
+# endpoint returns 261 bars spanning 1962-2026 — roughly quarterly — with HTTP 200 and no
+# indication that the granularity was changed. Measured on GE, 2026-10-18:
+#
+#     range=20y  -> 5031 bars, 2006-10-17 .. 2026-10-16   (daily, correct)
+#     range=15y  -> 3772 bars, 2011-10-17 .. 2026-10-16   (daily, correct)
+#     range=max  ->  261 bars, 1962-01-01 .. 2026-10-16   (NOT daily, silently)
+#
+# A factor panel built from that would compute a "200-day moving average" from 200 quarters.
+# `validRanges` does advertise `max`, and `15y`/`20y` are not in it yet work correctly, so the
+# advertised list is no guide either way. Hence a measurement at parse time rather than a rule.
+MAX_MEDIAN_GAP_DAYS = 5.0
 
 
 class YahooChartFeed:
@@ -118,6 +134,14 @@ class YahooChartFeed:
         if frame.empty:
             return {"ticker": ticker, "status": "nodata", "detail": "all closes null"}
 
+        # Is this actually daily data? See MAX_MEDIAN_GAP_DAYS for the `range=max` trap.
+        if len(frame) >= 3:
+            median_gap = frame.index.to_series().diff().dt.days.median()
+            if median_gap is not None and median_gap > MAX_MEDIAN_GAP_DAYS:
+                return {"ticker": ticker, "status": "granularity",
+                        "detail": f"median gap {median_gap:.0f}d over {len(frame)} bars; "
+                                  "the endpoint served a coarser interval than requested"}
+
         events = []
         for kind, key in (("split", "splits"), ("dividend", "dividends")):
             for ev in (res.get("events") or {}).get(key, {}).values():
@@ -175,6 +199,18 @@ class YahooChartFeed:
 
         ok = [r for r in records if r["status"] == "ok"]
         self.stats = self._tally(records, started, tickers, stopped_early=False)
+
+        # A handful of odd tickers can legitimately look coarse (a name that barely trades).
+        # A systematic rate means the request itself was served at the wrong granularity, and
+        # the resulting panel must not be scored.
+        coarse = sum(1 for r in records if r["status"] == "granularity")
+        if coarse > max(5, 0.01 * len(records)):
+            raise FeedError(
+                f"{coarse} of {len(records)} tickers came back coarser than daily. The request "
+                f"was served at the wrong granularity — `range=max` does this silently with "
+                f"HTTP 200. Use an explicit span such as 20y. Nothing has been cached."
+            )
+
         if not ok:
             raise FeedEmptyError(
                 f"all {len(tickers)} tickers came back without data "

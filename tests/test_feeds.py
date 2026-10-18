@@ -110,3 +110,21 @@ def test_coverage_report_counts_what_the_factor_floor_admits():
     report = prices.coverage_report(bars, min_bars=273)
     assert report["scorable"].all()
     assert prices.coverage_report(make_bars(sessions=100), min_bars=273)["scorable"].sum() == 0
+
+
+def test_panel_key_encodes_the_history_span(tmp_path):
+    """A 5-year and a 20-year panel of the same as-of date must not collide. Without the span
+    in the key, the horizon test -- which needs 20 years to have any independent observations
+    at all -- silently reads the 5-year panel and answers a different question."""
+    assert prices.panel_key("2026-10-16", 20) == "2026-10-16_20y"
+
+    prices.write_panel(make_bars(), prices.panel_key("2026-10-16", 5), "yahoo_chart",
+                       root=tmp_path)
+    prices.write_panel(make_bars(("CCC",)), prices.panel_key("2026-10-16", 20), "yahoo_chart",
+                       root=tmp_path)
+
+    assert prices.cached_as_of_dates("yahoo_chart", years=5, root=tmp_path) == ["2026-10-16_5y"]
+    assert prices.cached_as_of_dates("yahoo_chart", years=20, root=tmp_path) == ["2026-10-16_20y"]
+    assert len(prices.cached_as_of_dates("yahoo_chart", root=tmp_path)) == 2
+    # And the 20y key really holds the 20y panel, not the 5y one.
+    assert prices.read_panel("2026-10-16_20y", "yahoo_chart", root=tmp_path).tickers == ["CCC"]

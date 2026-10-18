@@ -78,6 +78,16 @@ CARRIED_FACTORS = ("price", "pct_of_52w_high", "max_dd_12m", "mom_12_1", "mom_36
                    "mom_accel", "days_above_ma200", "px_vs_ma200", "ma50_vs_ma200",
                    "vol_12m", "skew_12m", "adv_3m_usd")
 
+# Fundamental and sector columns carried into the record when a context frame is supplied.
+#
+# REPORTED, NOT SCORED — the distinction is `recovered/screen_v4.py`'s and it is deliberate:
+# the production screen attached fundamentals "for CONTEXT ... they did not improve selection,
+# so they are reported, not scored". None of these touches the ranking. They are here so a past
+# call can be read back with the company's condition beside it, and so the sector concentration
+# of a run is visible in its own output instead of only to someone eyeballing the tickers.
+CARRIED_CONTEXT = ("rule40", "op_margin", "net_margin", "rev_yoy_ttm", "rev_stability",
+                   "profitable", "sic", "sic_title")
+
 EXIT_REASONS = {
     "GATE_FAIL_PRICE": "price fell below the minimum the signal requires",
     "GATE_FAIL_LIQUIDITY": "dollar volume fell below the liquidity floor",
@@ -211,7 +221,8 @@ def classify_exit(previous: pd.Series, ranked: pd.DataFrame, top_n: int,
 
 
 def _listing_rows(ranked: pd.DataFrame, tickers: list[str], run_id: str, data_as_of: str,
-                  signal_version: str, first_seen: dict[str, str]) -> pd.DataFrame:
+                  signal_version: str, first_seen: dict[str, str],
+                  context: pd.DataFrame | None = None) -> pd.DataFrame:
     rows = []
     for ticker in tickers:
         if ticker not in ranked.index:
@@ -227,17 +238,33 @@ def _listing_rows(ranked: pd.DataFrame, tickers: list[str], run_id: str, data_as
             if factor in r.index:
                 value = r[factor]
                 row[factor] = None if pd.isna(value) else round(float(value), 6)
+        if context is not None and ticker in context.index:
+            ctx = context.loc[ticker]
+            for column in CARRIED_CONTEXT:
+                if column not in ctx.index:
+                    continue
+                value = ctx[column]
+                if pd.isna(value):
+                    row[column] = None
+                elif column == "sic_title":
+                    row[column] = str(value)
+                else:
+                    row[column] = round(float(value), 6)
         rows.append(row)
     return pd.DataFrame(rows)
 
 
 def run(factors: pd.DataFrame, data_as_of: str, feed_name: str,
         panel_stats: dict | None = None, top_n: int = sig.TOP_N,
-        tracking_dir: Path | None = None, dry_run: bool = False) -> RunResult:
+        tracking_dir: Path | None = None, dry_run: bool = False,
+        context: pd.DataFrame | None = None) -> RunResult:
     """Score one cross-section, diff it against the previous run, and append the record.
 
     `factors` is the output of `factors.compute_factors`, indexed by ticker.
     `data_as_of` is the panel's last session — never today's date.
+    `context` is optional per-ticker fundamental and sector data, carried into the record and
+    the report but NEVER scored. It cannot affect the ranking: `sig.score` is called on
+    `factors`, not on `context`, so a change in fundamental coverage cannot move a rank.
     """
     base = tracking_dir or TRACKING_DIR
     state = load_state(base)
@@ -304,7 +331,8 @@ def run(factors: pd.DataFrame, data_as_of: str, feed_name: str,
     for t in entries:
         first_seen[t] = data_as_of
 
-    listings = _listing_rows(ranked, carried, run_id, data_as_of, signal_version, first_seen)
+    listings = _listing_rows(ranked, carried, run_id, data_as_of, signal_version, first_seen,
+                             context=context)
     if not listings.empty:
         listings["rank_prev"] = listings["ticker"].map(prior_rank).astype("Int64")
         listings["rank_change"] = listings["rank_prev"] - listings["rank"]
@@ -412,6 +440,44 @@ def render_report(result: RunResult, diagnostics: dict | None = None) -> str:
             lines.append(f"| {int(r['rank'])} | **{r['ticker']}** | {change} | "
                          f"{int(r['runs_held'])} | {r['score']:+.3f} |")
     lines.append("")
+
+    watchlist = result.watchlist
+    if not watchlist.empty and "sic_title" in watchlist.columns:
+        mix = (watchlist["sic_title"].fillna("(unknown)").value_counts().head(8))
+        lines += ["## Sector mix of the watchlist", "",
+                  "Reported because it could not be before: `screen_v4.py` read industry from a",
+                  "Nasdaq screener download this environment cannot reach, so concentration was",
+                  "visible only to someone eyeballing the tickers. SIC comes free with the SEC",
+                  "filings. It is **not** scored — the industry overlay stays omitted and",
+                  "`signal_version` still hashes `industry_overlay: false`.", "",
+                  "| industry (SIC) | names | share |", "|---|---|---|"]
+        for title, count in mix.items():
+            lines.append(f"| {title} | {count} | {100 * count / len(watchlist):.0f}% |")
+        lines.append("")
+
+    fundamental_columns = [c for c in ("rule40", "op_margin", "rev_yoy_ttm", "rev_stability")
+                           if not watchlist.empty and c in watchlist.columns]
+    if fundamental_columns:
+        covered = int(watchlist["rule40"].notna().sum()) if "rule40" in watchlist else 0
+        lines += ["## Fundamental context — reported, not scored", "",
+                  f"{covered} of {len(watchlist)} listed names have a usable `rule40` — the",
+                  "variable the recovered exclusion rule keys on. As-filed, from the SEC",
+                  "Financial Statement Data Sets, dated by their real filing date. A name can",
+                  "have a filing row but no `rule40` if its operating-margin tag is absent.",
+                  "These values did **not** influence the ranking above:",
+                  "`screen_v4.py` found fundamentals \"did not improve selection, so they are",
+                  "reported, not scored\", and that decision stands.", "",
+                  "| ticker | rule40 | op margin | rev YoY (TTM) | rev instability |",
+                  "|---|---|---|---|---|"]
+
+        def fmt(value):
+            return "—" if value is None or pd.isna(value) else f"{value:+.3f}"
+
+        for _, r in watchlist.sort_values("rank").head(25).iterrows():
+            lines.append(f"| **{r['ticker']}** | {fmt(r.get('rule40'))} | "
+                         f"{fmt(r.get('op_margin'))} | {fmt(r.get('rev_yoy_ttm'))} | "
+                         f"{fmt(r.get('rev_stability'))} |")
+        lines.append("")
 
     if diagnostics:
         lines += ["## Diagnostics", "",
