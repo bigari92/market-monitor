@@ -453,6 +453,40 @@ def cmd_survivorship(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_c2(args: argparse.Namespace) -> int:
+    """C2 — the block bootstrap kill gate. Reads the pre-registered threshold, never sets it.
+
+    Needs the per-date IC series written by the C2 run (results/c2_ic_by_date_12m.csv). The
+    verdict belongs to whatever the number says: a FAIL means the prediction half ends, and
+    looking for a variant that passes is the exact search this gate exists to penalise.
+    """
+    from . import bootstrap as B
+
+    path = RESULTS / "c2_ic_by_date_12m.csv"
+    if not path.exists():
+        print(f"no IC series at {path}; see results/c2_block_bootstrap.md §7", flush=True)
+        return 1
+    ic = pd.read_csv(path, index_col=0)
+
+    trials = B.reconstructed_trial_count()
+    print(f"reconstructed trial count (documented floor): {trials['documented_total']}",
+          flush=True)
+    print(f"candidate configurations in the check: {ic.shape[1]}", flush=True)
+    print(f"\npre-registered kill condition: p > {B.KILL_THRESHOLD:.2f} ends the prediction half",
+          flush=True)
+
+    for block in (6, 12, 24):
+        rc = B.reality_check(ic, block_length=block, n_resamples=B.DEFAULT_RESAMPLES,
+                             focus="m:price")
+        print(f"  block={block:2d}  best={rc.best_config:24s}  p_single={rc.p_single_config:.4f}"
+              f"  p_RC={rc.p_reality_check:.4f}", flush=True)
+        if block == 12:
+            print(f"\n  {rc.verdict()}", flush=True)
+
+    print("\nThe written verdict is results/c2_block_bootstrap.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -522,6 +556,9 @@ def main(argv: list[str] | None = None) -> int:
         "survivorship", help="delisting rate and the C3 survivorship bound")
     surv.add_argument("--refresh", action="store_true")
     surv.set_defaults(func=cmd_survivorship)
+
+    c2 = sub.add_parser("c2", help="the block bootstrap kill gate (C2)")
+    c2.set_defaults(func=cmd_c2, refresh=False)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)
