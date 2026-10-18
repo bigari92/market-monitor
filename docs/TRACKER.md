@@ -111,6 +111,49 @@ could not (see the commit log). It writes to `results/replay/` and never touches
 First run takes ~150s to fetch; afterwards the panel is cached in `data/panels/` (gitignored,
 ~2s to read). `data/` is never committed; the ranking is what gets committed, and it is small.
 
+## 5a. The monthly run is automated
+
+`.github/workflows/monthly-tracker.yml` runs the tracker at **06:17 UTC on the 1st** of each
+month — after the previous month's final US close, so the panel's last session is that month
+end. It installs `requirements-cloud.txt`, runs the test suite, runs
+`run --years 5 track`, and commits the appended `results/tracking/` back to the branch.
+
+**It is a GitHub Action, not a scheduled Claude session, and that is deliberate.** The tracker
+is a deterministic script — fetch, score a fixed signal, diff, commit — with no model in the
+loop, so paying Claude credit monthly would buy nothing. At the measured ~USD 43/session it
+would have exhausted the remaining USD 47 within two months. The Action is free.
+
+Three things about it worth knowing:
+
+- **A `schedule` trigger only fires for workflows on the repository's DEFAULT branch.** This
+  file lives on `main-grop3y`, so **the schedule will not run until it is merged into `main`**,
+  however correct it looks. `workflow_dispatch` works from any branch — use it to test first.
+- **`--years 5`, not the 20-year default.** The 2026-10-16 ranking was verified bit-identical on
+  both panels (the factors are point-in-time, so extra history cannot change them), and 5 years
+  is a 150s fetch against 221s and a 114 MB panel against 270 MB. The gated funnel is identical
+  (2,697 → 540); only the scorable count moves by two names, which are names that fail the
+  273-session floor either way.
+- **Re-running is a no-op, not a second row.** A repeat of the same `data_as_of` under the same
+  `signal_version` is the *same call*, so `tracker.run` detects the existing `run_id`, writes
+  nothing and leaves `latest_run.md` alone. Without that, a re-dispatch or a retry would put two
+  contradictory rows behind one `run_id` and corrupt every diff computed from the record
+  afterwards.
+
+### The one real risk, unmeasured
+
+The feed worked perfectly from this project's cloud container — 28,638 price requests across four
+sweeps with zero failures (`results/price_feed_probe.md`). **GitHub Actions runners are a
+different, heavily-used datacentre IP pool, and Yahoo is known to rate-limit those.** Whether the
+endpoint serves a GitHub runner is **not something this session could test**, and the first
+scheduled run is the experiment.
+
+It fails safely either way: `YahooChartFeed` makes one attempt per ticker, never retries through
+a throttle, and raises `FeedThrottledError` at five 429s, so a throttled run is a **red workflow
+run with nothing committed** rather than a ranking built on a half-fetched market. If it does get
+throttled, the fallbacks in order are: run `track` locally once a month (the panel fetch is the
+only part that needs the network), or pay for a scheduled Claude session, or buy a licensed feed
+(`feeds/sharadar.py`).
+
 ## 6. Cadence: monthly — measured, not assumed
 
 This was the one open question. It is now settled by measurement:

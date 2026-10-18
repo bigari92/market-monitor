@@ -261,3 +261,35 @@ def test_a_refusal_propagates_rather_than_writing_a_ranking(tmp_path):
     with pytest.raises(sig.RefusedToRank):
         tracker.run(cross_section(n=12), "2026-10-16", "test_feed", tracking_dir=tmp_path)
     assert not (tmp_path / tracker.LISTINGS_CSV).exists()
+
+
+def test_rerunning_the_same_run_id_is_a_no_op_not_a_second_row(tmp_path):
+    """Idempotence, which automation makes essential. A monthly job gets re-dispatched and
+    retried; a second run of the same as_of under the same signal version is the SAME call, so
+    appending it twice would put two contradictory rows behind one run_id and corrupt every
+    diff computed from the record afterwards."""
+    factors = cross_section(seed=5)
+    first = tracker.run(factors, "2026-10-16", "test_feed", tracking_dir=tmp_path)
+    assert not first.already_recorded
+    runs_after_one = (tmp_path / tracker.RUNS_CSV).read_text()
+    listings_after_one = (tmp_path / tracker.LISTINGS_CSV).read_text()
+
+    second = tracker.run(factors, "2026-10-16", "test_feed", tracking_dir=tmp_path)
+    assert second.already_recorded
+    assert second.run_id == first.run_id
+    assert second.buys.empty and second.exits.empty
+
+    # Nothing was written the second time.
+    assert (tmp_path / tracker.RUNS_CSV).read_text() == runs_after_one
+    assert (tmp_path / tracker.LISTINGS_CSV).read_text() == listings_after_one
+    assert len(pd.read_csv(tmp_path / tracker.RUNS_CSV)) == 1
+
+
+def test_a_new_as_of_still_appends_after_a_no_op(tmp_path):
+    """The guard must not wedge the record: a genuinely new run still goes in."""
+    factors = cross_section(seed=5)
+    tracker.run(factors, "2026-10-16", "test_feed", tracking_dir=tmp_path)
+    tracker.run(factors, "2026-10-16", "test_feed", tracking_dir=tmp_path)   # no-op
+    third = tracker.run(factors, "2026-11-16", "test_feed", tracking_dir=tmp_path)
+    assert not third.already_recorded
+    assert len(pd.read_csv(tmp_path / tracker.RUNS_CSV)) == 2

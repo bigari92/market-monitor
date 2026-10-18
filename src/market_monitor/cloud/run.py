@@ -138,6 +138,16 @@ def cmd_track(args: argparse.Namespace) -> int:
         print(f"REFUSED: {exc}", flush=True)
         return 3
 
+    if result.already_recorded:
+        # Idempotent no-op. Do NOT re-render latest_run.md: the stored report describes the
+        # run that was actually recorded, and regenerating it here would overwrite a real
+        # report ("25 entered") with an empty one ("None entered this run"), because this
+        # path has no diff to report. An automated monthly job gets re-dispatched, so this is
+        # a routine path, not an edge case.
+        print(f"run {result.run_id} is already in the record — nothing written, nothing "
+              f"changed. The stored report is results/tracking/latest_run.md.", flush=True)
+        return 0
+
     report = tracker.render_report(result, diagnostics)
     if not args.dry_run:
         (RESULTS / "tracking").mkdir(parents=True, exist_ok=True)

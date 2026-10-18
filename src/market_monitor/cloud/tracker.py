@@ -98,6 +98,10 @@ EXIT_REASONS = {
 }
 
 
+class RunAlreadyRecorded(RuntimeError):
+    """This exact run_id is already in the record. Raised only when a caller insists."""
+
+
 @dataclass(frozen=True)
 class RunResult:
     """What one run produced. Returned so a caller can report without re-reading the files."""
@@ -110,6 +114,12 @@ class RunResult:
     watchlist: pd.DataFrame
     funnel: dict
     is_first_run: bool
+    # True when the run_id was already present and nothing was written. An automated monthly
+    # job gets re-dispatched and retried, and an append-only record must be idempotent: a
+    # second run of the same as_of under the same signal version is the SAME call, so recording
+    # it twice would put two contradictory rows behind one run_id and corrupt every diff
+    # computed from it afterwards.
+    already_recorded: bool = False
 
 
 def _read(path: Path, parse_dates: list[str] | None = None) -> pd.DataFrame:
@@ -276,6 +286,17 @@ def run(factors: pd.DataFrame, data_as_of: str, feed_name: str,
     funnel = dict(ranked.attrs.get("funnel", {}))
 
     run_id = f"{data_as_of}_{signal_version}"
+
+    # Idempotence. The record is append-only, so a repeat of the same run_id is a no-op rather
+    # than a second row -- see RunResult.already_recorded.
+    if not state["runs"].empty and run_id in set(state["runs"]["run_id"]):
+        existing = state["listings"]
+        carried_rows = existing[existing["run_id"] == run_id] if not existing.empty \
+            else pd.DataFrame()
+        empty = pd.DataFrame()
+        return RunResult(run_id=run_id, data_as_of=data_as_of, signal_version=signal_version,
+                         buys=empty, exits=empty, holds=empty, watchlist=carried_rows,
+                         funnel=funnel, is_first_run=False, already_recorded=True)
 
     # Where each name was last run, for the rank-movement column.
     if previous.empty:
