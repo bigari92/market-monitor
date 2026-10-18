@@ -9,9 +9,27 @@ Every dollar is accounted here against a named package or a named defect.
 
 | | |
 |---|---|
-| Repo exists and is pushed | **pending** — see the setup checklist below |
-| Cloud availability | `available: false`, reason `no_readable_git_checkout` (probed 2026-10-18) |
+| Repo exists locally | **yes** — first commit 2026-10-18, 52 files, clean tree |
+| Pushed to GitHub | **pending** — needs `gh auth login`, which only the owner can run |
+| Cloud availability | `available: false`, reason `no_readable_git_checkout` (re-probed after the first commit) |
 | Cloud environment confirmed | **unknown** — a second precondition, separate from the repo |
+
+### Three preconditions, not one
+
+Measured, not assumed. Each was discovered by probing rather than by reading docs:
+
+1. **A GitHub remote.** `gh` is installed (2.102.0) but not authenticated, and `gh auth login` is
+   interactive — the owner runs it, nobody else can.
+2. **A cloud environment.** Separate from the repo, and it can be refused on its own
+   (`hosted: false` means it needs the owner's click; `fitsRepository: false` means it cannot run
+   this repository). Still unverified.
+3. **The repo must be the session's *project folder*, or be named explicitly.** This one is easy
+   to miss: after the first commit here, availability was still `no_readable_git_checkout`,
+   because the app checks the session's project folder — `C:\Users\valer\OneDrive\Рабочий
+   стол\Claude` — and a git repo *nested inside* it does not count. Two ways round it: open
+   `market-monitor` as its own session folder, or start the cloud session with an explicit
+   `repository: "<owner>/market-monitor"`, which is permitted even when the current project has
+   no repo of its own.
 | Does the credit expire? | **UNKNOWN — find out before planning around a multi-week local gate** |
 | Real cost of one session | **UNMEASURED** — every figure below is provisional until C0 |
 
