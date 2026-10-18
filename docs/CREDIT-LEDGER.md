@@ -64,7 +64,7 @@ spent first and the rest is re-allocated against the real reading.**
 |---|---|---|---|---|---|
 | 2026-10-18 | repo + venv setup (local) | — | 0.00 | 90.00 | Repo skeleton, enforcement tests, recovered pipeline committed. No credit touched. |
 | 2026-10-18 | push to GitHub (local) | — | 0.00 | 90.00 | bigari92/market-monitor created PRIVATE and pushed. Remote tree and full history verified free of personal data. Preconditions 1 of 3 cleared; 2 unknown, 3 pending a turn boundary. No credit touched. |
-| 2026-10-18 | **first cloud session** — feed probe + tracker build | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Four commits on `main-grop3y`. |
+| 2026-10-18 | **first cloud session** — feed probe + tracker build + horizon test | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Cadence settled by measurement, not judgement: `results/horizon_test.md`. Six commits on `main-grop3y`. |
 
 ## C0 — the burn-rate calibration, and the one thing it could not do
 
@@ -84,11 +84,13 @@ What *is* measurable from inside, as a proxy for the next session's planner:
 
 | | |
 |---|---|
-| Wall-clock, end to end | ~35 minutes |
-| Full 7,161-ticker price sweeps | 2 (149s and 150s), ~1.1 GB fetched, 0 failures |
+| Wall-clock, end to end | ~70 minutes |
+| Full-universe price sweeps | 3 — two 5-year (149s, 150s) and one 20-year (179s). ~2 GB fetched, **0 failures across 21,477 requests** |
 | 24-month replay over the cached panel | 1, ~90s |
-| Test suite runs | 6 (12 tests at start → 62 at end) |
-| Commits pushed | 4 |
+| Horizon test: 190 rebalance dates scored at two horizons | 1, ~6 min |
+| Test suite runs | 11 (12 tests at start → 78 at end) |
+| Commits pushed | 6 |
+| Peak disk for the cached panel | 270 MB (gitignored, never committed) |
 | **Data cost** | **USD 0.00 — every source used is free** |
 
 ### What this session actually did against the plan
