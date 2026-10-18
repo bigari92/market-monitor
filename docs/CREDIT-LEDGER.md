@@ -3,7 +3,11 @@
 A one-off budget that is not itself audited gets spent on whatever a session felt like doing.
 Every dollar is accounted here against a named package or a named defect.
 
-**Opening balance: USD 90.00. Spent to date: USD 0.00.**
+**Opening balance: USD 90.00. Spent to date: USD 43.00. Remaining: USD 47.00.**
+
+**Burn rate, finally measured: ~USD 43 for one ~3-hour session of this shape (~USD 14/hour).**
+That is the number C0 existed to produce, and it is the one fact every plan below has to respect:
+**the remaining USD 47 funds roughly one more session of this size, not three.**
 
 ## Status
 
@@ -44,7 +48,7 @@ spent first and the rest is re-allocated against the real reading.**
 | C0 | Burn-rate calibration: one deliberately trivial session. Prove the mechanism — repo, venv, incremental commits, tests green in a PR — and read the actual consumption | 5 | — | Nothing expensive may depend on an untested platform |
 | C1 | As-filed fundamentals from the SEC Financial Statement Data Sets (2009Q1–2026Q3), reduced to a committed parquet with a real filing date per row | 20 | — | Replaces the restatement-contaminated `frames` route; removes the 90-day-lag approximation |
 | C2 | **Block bootstrap** — re-run the whole factor search per resample against the reconstructed trial count | 25 | — | **KILL GATE: p > 0.10 on the best configuration ends the prediction half** |
-| C3 | Survivorship **bound** at three imputation severities, reported beside the survivor-only baseline | 15 | — | Only if the Form 25 join-rate test passes first (free, local, ~20 min) |
+| C3 | ~~Survivorship **bound**~~ **DONE, USD 0** — three severities reported beside the survivor-only baseline; delisting rate measured at 7.71%/yr from 30,809 Form 25 filings. `results/survivorship.md` | ~~15~~ **0** | 0.00 | The Form 25 test it was gated on passed, and the bound came with it. **USD 15 released.** |
 | C4 | Local review of everything the cloud committed | 0 | — | A cloud commit is a claim, not a result |
 | C5 | Reserve, releasable only against a named failing test | 25 | — | Every stage finds one defect |
 
@@ -55,6 +59,13 @@ spent first and the rest is re-allocated against the real reading.**
    costs — costs nothing and is the likeliest route to a verdict of "do not continue".
 2. **C2 is a gate, not a line item.** Its kill condition is written above, before it runs.
 3. The reserve is not a slush fund. Releasing it requires naming the failing test.
+5. **Spend C2 next, and spend nothing else first.** C1 and C3 are done for USD 0, so USD 47
+   remains against a C2 price of USD 25. C2 is the designated kill gate, and every other figure
+   this project has measured is provisional until it runs. **Sharadar at USD 199/yr is 4.2x the
+   remaining balance and must wait for C2 to pass** — `results/survivorship.md` §6.
+6. **One session's worth of money is left.** At the measured USD 43/session, USD 47 funds
+   roughly one more session of this size. C2 should be that session, and it should be scoped to
+   C2 alone.
 4. If a session overruns its package, it stops and records the overrun here rather than
    continuing on the next package's money.
 
@@ -64,23 +75,25 @@ spent first and the rest is re-allocated against the real reading.**
 |---|---|---|---|---|---|
 | 2026-10-18 | repo + venv setup (local) | — | 0.00 | 90.00 | Repo skeleton, enforcement tests, recovered pipeline committed. No credit touched. |
 | 2026-10-18 | push to GitHub (local) | — | 0.00 | 90.00 | bigari92/market-monitor created PRIVATE and pushed. Remote tree and full history verified free of personal data. Preconditions 1 of 3 cleared; 2 unknown, 3 pending a turn boundary. No credit touched. |
-| 2026-10-18 | **first cloud session** — feed probe + tracker build + horizon test | C0, overran into tracker work | **not self-measurable — see below** | **unknown; owner must read it** | Feed question settled (free panel viable, zero data cost). Tracker built, tested, first dated run committed. Cadence settled by measurement, not judgement: `results/horizon_test.md`. Six commits on `main-grop3y`. |
+| 2026-10-18 | **first cloud session** — feed probe, tracker, horizon test, SEC fundamentals, cost model | C0 (overran deliberately: C1 absorbed) | **43.00** | **47.00** | Owner read the console: 90 → 47. Delivered the feed decision, the tracker + first dated run, the cadence measurement, C1's as-filed fundamentals, and the cost model. RECOVERY.md defects 2 and 4 closed, 3 made inapplicable. 11 commits on `main-grop3y`. |
 
-## C0 — the burn-rate calibration, and the one thing it could not do
+## C0 — the burn-rate calibration: closed, at USD 43
 
 C0's purpose was to "prove the mechanism — repo, venv, incremental commits, tests green — and
-read the actual consumption". The mechanism is proven. **The consumption is not readable from
-inside the session, and this is a finding C0 was supposed to produce.**
+read the actual consumption". **Both halves are now done: the mechanism is proven and the
+consumption is USD 43** (90.00 → 47.00, read from the console by the owner on 2026-10-18).
 
-A cloud session has no access to its own billing. It cannot see a dollar figure, a token count,
-or a remaining balance, so rule 7 — "append what was spent before the session ends" — cannot be
-satisfied by the session alone. The honest entry is a blank with a pointer, not a guess, and an
-invented figure would be worse than a blank because it would be carried forward as fact.
+The reading cost USD 38 more than C0's USD 5 allocation, because the session did not stay inside
+a calibration run — it delivered the tracker, the cadence measurement, C1 and the cost model. The
+overrun is recorded rather than re-scoped: see below.
 
-**The owner closes this loop**, by reading the actual spend from the Claude console and replacing
-the row above. Until then no package below should be planned against a per-session cost.
+**A cloud session cannot read its own billing.** It has no access to a dollar figure, a token
+count or a remaining balance, so rule 7 — "append what was spent before the session ends" —
+cannot be satisfied by the session alone. That is a standing limitation, not a one-off: **every
+future session's spend has to be closed out by the owner from the console.** The honest in-session
+entry is a blank with a pointer, never a guess.
 
-What *is* measurable from inside, as a proxy for the next session's planner:
+What is measurable from inside, as the per-session yardstick:
 
 | | |
 |---|---|
@@ -93,6 +106,7 @@ What *is* measurable from inside, as a proxy for the next session's planner:
 | Peak disk for the cached panel | 270 MB price panel + 63 MB SEC facts (gitignored) |
 | SEC Financial Statement Data Sets | 70 quarterly zips, ~5 GB downloaded, stream-filtered and deleted; 3.37M facts kept |
 | **Data cost** | **USD 0.00 — every source used is free** |
+| **Session cost** | **USD 43.00** — so ~USD 14/hour, or ~USD 3.6 per full-universe sweep-equivalent |
 
 ### What this session actually did against the plan
 
@@ -108,8 +122,7 @@ The work does, however, remove cost from two later packages:
   cost.** 413,516 point-in-time rows over 14,995 CIKs from the SEC Financial Statement Data
   Sets, as-filed with real filing dates, joined on CIK. See `results/fundamentals_build.md`.
   C1's USD 20 is therefore released back to the unallocated balance, not spent.
-- **C3 (survivorship bound, USD 15)** is narrower than written: the *forward* tracking record is
-  survivorship-bias-free by construction, so C3 is now only about rehabilitating the historical
-  backtest, which is a separable question the tracker does not depend on.
+- **C3 (survivorship bound, USD 15)** is **done, inside this session, for USD 0.** The Form 25
+  census and the bound are both free. `results/survivorship.md`. **USD 15 released.**
 
 Neither saving is booked until someone measures it.

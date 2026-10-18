@@ -88,7 +88,7 @@ SEC company_tickers_exchange.json      10,444 rows
 
 | RECOVERY.md defect | status |
 |---|---|
-| 1. Survivor-only universe | **Structural for backtests; void forward.** The tracker records point-in-time and keeps exits, so its own history is unbiased. Sharadar is priced in `feeds/sharadar.py` for the backtest case. |
+| 1. Survivor-only universe | **Bounded, not fixed** — `results/survivorship.md`. Delisting rate measured at **7.71%/yr** from 30,809 Form 25 filings, which overstates the measured edge by **8.4%**; the edge survives even at four times that rate. Still structural for backtests, and void forward (the tracker records point-in-time and keeps exits). The free route is blocked at the symbol: SEC clears a delisted company's ticker, so there is nothing to ask a price feed for. |
 | 2. `auto_adjust=True` hides corporate actions | **Fixed at the source.** The raw endpoint returns `close`, `adjclose` and the split/dividend tables; 60,889 actions captured. Trend reads `close`, momentum reads `adjclose`. |
 | 3. 12× overlapping forward returns | **Not applicable.** The tracker computes no forward return. It is also why §3 reports no performance. |
 | 4. No cost model | **Closed** — `results/cost_model.md`. Spread estimated by two published estimators (converging at 96–99 bps on the top 25), commission from a published rate card, impact scaled by the cohort's own volatility, and turnover **measured** at 3.25×/yr from the replay record. Execution cost is 1.0–1.9pp a year for a 12-month hold and 3.2–6.1pp as configured, against 2.7–13× break-even headroom. Tax stays out of scope by design (CLOUD-RULES.md §3). |
@@ -174,7 +174,14 @@ but it changes what the record means, so it is recorded per run in `runs.csv`.
    higher gross excess is almost exactly consumed by it. **Monthly review stays right, and the
    conservative exit rules turn out to be load-bearing rather than merely defensible.**
 
-6. **Survivorship is now the binding defect.** It is the only one of the four still structural,
-   it cannot be fixed by being careful, and every net figure in `results/cost_model.md` inherits
-   it. `feeds/sharadar.py` is priced and ready; this is the one place money would buy a real
-   answer rather than a convenience.
+6. ~~**Survivorship is now the binding defect.**~~ **Bounded** — `results/survivorship.md`. It
+   dilutes the measured edge by 8.4% at the measured 7.71%/yr delisting rate, and would need a
+   rate above 78% to erase the post-cost edge. It remains structural, but it is no longer the
+   thing most likely to be wrong.
+
+7. **C2 — the block bootstrap — is now the binding item, and it is the designated kill gate.**
+   *"p > 0.10 on the best configuration ends the prediction half."* The weight vector came from
+   a factor search whose multiple-testing bar has never been scored, so **until C2 runs, none of
+   the measured figures is established** — bounded, cost-adjusted or otherwise. It costs USD 25
+   against USD 47 remaining, so it fits, and it should be the next money spent.
+   **Sharadar (USD 199/yr) should wait for C2 to pass** — see `results/survivorship.md` §6.

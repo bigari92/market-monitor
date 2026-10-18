@@ -409,6 +409,50 @@ def cmd_cost(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_survivorship(args: argparse.Namespace) -> int:
+    """The survivorship bound and the delisting rate. RECOVERY.md defect 1, bounded not fixed."""
+    from . import survivorship as S
+
+    census = SEC_DIR.parent / "sec_delist" / "form25.parquet"
+    if not census.exists():
+        print(f"no Form 25 census at {census}; see results/survivorship.md §7", flush=True)
+        return 1
+    form25 = pd.read_parquet(census)
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    live = set(uni["cik"].dropna().astype(int))
+    ticker_path = census.parent / "f25_ticker_present.parquet"
+    ticker_present = (pd.read_parquet(ticker_path)["ticker_present"].to_dict()
+                      if ticker_path.exists() else None)
+
+    rate = S.delisting_rate(form25, live, ticker_present, universe_size=len(uni))
+    print(f"\nForm 25: {len(form25):,} filings, {form25['cik'].nunique():,} distinct CIKs",
+          flush=True)
+    print(rate.to_string(index=False), flush=True)
+
+    core = rate[(rate["year"] >= 2010) & (rate["year"] <= 2025)]
+    f = float(core["rate_gone_%"].median()) / 100
+    print(f"\nmedian strict delisting rate 2010-2025: {100 * f:.2f}%", flush=True)
+
+    # The measured inputs from results/horizon_test.md, at the validated 12-month horizon.
+    print(f"\nC3 bound at f = {100 * f:.2f}%:", flush=True)
+    print(S.bound_table(11.875, 12.16, f).to_string(index=False), flush=True)
+
+    print("\nsensitivity (the gated cohort delists faster than the universe, by an "
+          "unmeasurable margin):", flush=True)
+    rows = [{"f": rate_, **{k: v for k, v in
+                            S.bound_excess(11.875, 12.16, rate_, "severe").as_row().items()
+                            if k in ("pessimistic_pp", "overstatement_x")}}
+            for rate_ in (f, 0.10, 0.15, 0.20, 0.25, 0.33)]
+    print(pd.DataFrame(rows).round(3).to_string(index=False), flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    rate.to_csv(RESULTS / "survivorship_delisting_rate.csv", index=False)
+    print("\nThe written verdict, including the Sharadar decision, is "
+          "results/survivorship.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -473,6 +517,11 @@ def main(argv: list[str] | None = None) -> int:
         "cost", help="execution cost: spread, commission, impact, measured turnover")
     cost_cmd.add_argument("--refresh", action="store_true")
     cost_cmd.set_defaults(func=cmd_cost)
+
+    surv = sub.add_parser(
+        "survivorship", help="delisting rate and the C3 survivorship bound")
+    surv.add_argument("--refresh", action="store_true")
+    surv.set_defaults(func=cmd_survivorship)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)
