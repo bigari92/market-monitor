@@ -28,6 +28,22 @@ def cache_dir(as_of: str, feed_name: str, root: Path | None = None) -> Path:
     return (root or DATA_DIR) / "panels" / f"{feed_name}_{as_of}"
 
 
+def cached_as_of_dates(feed_name: str, root: Path | None = None) -> list[str]:
+    """As-of dates this feed has cached, oldest first.
+
+    Parsed by stripping the known feed prefix, not by splitting on the first underscore: feed
+    names contain underscores ("yahoo_chart"), and splitting on the first one yields the
+    cache-missing, cache-duplicating key "chart_2026-10-16".
+    """
+    panels = (root or DATA_DIR) / "panels"
+    if not panels.is_dir():
+        return []
+    prefix = f"{feed_name}_"
+    found = [p.name[len(prefix):] for p in panels.iterdir()
+             if p.is_dir() and p.name.startswith(prefix) and not p.name.endswith(".partial")]
+    return sorted(found)
+
+
 def write_panel(bars: Bars, as_of: str, feed_name: str, root: Path | None = None,
                 stats: dict | None = None) -> Path:
     """Write a complete panel. Writes to a temporary sibling then renames, so an interrupted
@@ -104,8 +120,13 @@ def assert_fresh(bars: Bars, as_of: pd.Timestamp, max_staleness_days: int = 7) -
     The silent-stale-panel failure is the one that cannot be noticed from the output: a ranking
     computed on three-week-old prices looks exactly like a ranking computed on today's.
     """
-    last = pd.Timestamp(bars.close.index.max())
-    gap = (pd.Timestamp(as_of).normalize() - last.normalize()).days
+    last = pd.Timestamp(bars.close.index.max()).tz_localize(None).normalize()
+    # Both sides forced tz-naive: the panel index is naive and a caller passing
+    # `Timestamp.utcnow()` is aware, which raises rather than comparing.
+    reference = pd.Timestamp(as_of)
+    if reference.tzinfo is not None:
+        reference = reference.tz_convert(None)
+    gap = (reference.normalize() - last).days
     if gap > max_staleness_days:
         raise FeedEmptyError(
             f"panel's last session is {last:%Y-%m-%d}, {gap} days before as_of "
