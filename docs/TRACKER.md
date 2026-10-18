@@ -101,6 +101,7 @@ python -m market_monitor.cloud.run track --dry-run    # score and report, write 
 python -m market_monitor.cloud.run universe           # the universe funnel alone
 python -m market_monitor.cloud.run probe              # re-measure the feed
 python -m market_monitor.cloud.run replay --months 24 # past dates into results/replay/
+python -m market_monitor.cloud.run --years 20 horizon  # rank IC and tails at 3m vs 12m
 ```
 
 `replay` is mechanical validation and **not a backtest**: no forward return, no performance. It
@@ -110,27 +111,36 @@ could not (see the commit log). It writes to `results/replay/` and never touches
 First run takes ~150s to fetch; afterwards the panel is cached in `data/panels/` (gitignored,
 ~2s to read). `data/` is never committed; the ranking is what gets committed, and it is small.
 
-## 6. The one open question: cadence
+## 6. Cadence: monthly — measured, not assumed
 
-Everything above is built. This is the decision that is not mine to make.
+This was the one open question. It is now settled by measurement:
+**`results/horizon_test.md`**, 190 monthly rebalance dates over 2010–2025.
 
-**The signal's evidence is a 12-month holding period on a monthly rebalance grid.** The tracker
-can run at any cadence, and the exit rules are deliberately conservative so that rank noise does
-not retire a name — a listing is treated as a 12-month thesis. But reviewing more often than the
-evidence covers is still extrapolation, and `recovered/horizon_test.py` asked exactly this
-question at 3 months and its *results* were never recovered — only the script.
+The signal carries genuine information at 3 months (rank IC 0.096, positive in 74% of months,
+t = 5.4 on 63 independent observations), so a monthly-refreshed ranking is reading signal rather
+than reshuffling. More importantly, **the one thing the tracker does on review — detect
+deterioration — works better at the short horizon than the long one:** the top 25 cuts the
+frequency of a −30% move by **1.92× at 3 months against 1.58× at 12**, better identified
+(t 5.65 vs 3.52), and positive in 15 of 16 calendar years.
 
-**Recommendation: monthly**, matching the grid the research used. A 24-month replay at monthly
-cadence produces a watchlist that settles around 28–38 names with 4–13 exits a month, which is a
-readable amount of change. Weekly would mostly add noise the exit rules are built to ignore.
+The 12-month horizon has the larger IC (0.148) and the weaker evidence: 20 years of monthly dates
+contain only ~15 independent 12-month observations against 63 at 3 months. Identification, not
+magnitude, is the binding constraint — and it is the reason the published t-statistics in the
+recovered research were inflated 3.4×.
 
-Two things would change this and both are cheap:
+**Monthly review is not monthly trading**, and that distinction is what makes the cadence safe.
+A 3-month *holding* period would mean ~4× the turnover, and nothing in this project deducts
+commission, spread or tax (RECOVERY.md defect 4 is open), so the horizon test's gross figures
+cannot say that quarterly rebalancing beats annual net of costs — and it does not claim to. The
+exit rules fire on structural breaks rather than rank drift, so a listing stays a long-horizon
+thesis that gets *checked* often. The 24-month replay confirms the shape: 4–13 exits a month from
+a watchlist of 28–38, not wholesale rotation.
 
-- **Re-run `horizon_test.py`'s logic** on the current panel to recover the 3-month answer. Free,
-  local, and it would replace a judgement call with a measurement.
-- **Say if a different cadence is wanted anyway.** Cadence is not hashed into `signal_version`,
-  so changing it does not invalidate the record — but it does change what the record means, so
-  it is recorded per run in `runs.csv`.
+Weekly is not supported: nothing measured speaks to horizons under 63 trading days, and the exit
+rules are built to ignore the rank noise a weekly cadence would surface.
+
+Cadence is not hashed into `signal_version`, so changing it later does not invalidate the record —
+but it changes what the record means, so it is recorded per run in `runs.csv`.
 
 ## 7. What to do next, in order of value
 

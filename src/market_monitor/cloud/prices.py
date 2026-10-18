@@ -28,8 +28,20 @@ def cache_dir(as_of: str, feed_name: str, root: Path | None = None) -> Path:
     return (root or DATA_DIR) / "panels" / f"{feed_name}_{as_of}"
 
 
-def cached_as_of_dates(feed_name: str, root: Path | None = None) -> list[str]:
-    """As-of dates this feed has cached, oldest first.
+def panel_key(as_of: str, years: int) -> str:
+    """The cache key for a panel: its as-of date AND its history span.
+
+    The span has to be in the key. Without it a 5-year panel and a 20-year panel of the same
+    as-of date collide, and the horizon test — which needs 20 years to have any independent
+    observations at all — would silently read the 5-year panel and answer a different question
+    from the one asked.
+    """
+    return f"{as_of}_{years}y"
+
+
+def cached_as_of_dates(feed_name: str, years: int | None = None,
+                       root: Path | None = None) -> list[str]:
+    """Panel keys this feed has cached, oldest first; optionally only those of a given span.
 
     Parsed by stripping the known feed prefix, not by splitting on the first underscore: feed
     names contain underscores ("yahoo_chart"), and splitting on the first one yields the
@@ -41,6 +53,8 @@ def cached_as_of_dates(feed_name: str, root: Path | None = None) -> list[str]:
     prefix = f"{feed_name}_"
     found = [p.name[len(prefix):] for p in panels.iterdir()
              if p.is_dir() and p.name.startswith(prefix) and not p.name.endswith(".partial")]
+    if years is not None:
+        found = [key for key in found if key.endswith(f"_{years}y")]
     return sorted(found)
 
 

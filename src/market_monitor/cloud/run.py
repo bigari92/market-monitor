@@ -23,7 +23,13 @@ from . import prices, signal, tracker, universe
 from .feeds import FeedError, get_feed
 
 DEFAULT_FEED = "yahoo_chart"
-DEFAULT_YEARS = 5
+
+# 20 years, not 5. The horizon test needs this depth to have any independent observations at all
+# (results/horizon_test.md), and one cached panel serving every command beats two. It costs
+# nothing in accuracy for `track`: the 2026-10-16 ranking is bit-identical on the 5-year and
+# 20-year panels, which is the point-in-time property confirmed on real data rather than only in
+# tests. Do NOT reach for `range=max` to go deeper -- see MAX_MEDIAN_GAP_DAYS in the Yahoo feed.
+DEFAULT_YEARS = 20
 RESULTS = Path(__file__).resolve().parents[3] / "results"
 
 
@@ -44,13 +50,15 @@ def _load(feed_name: str, years: int, refresh: bool, limit: int | None):
     # The cache key needs an as-of date, but the as-of date comes from the panel. Resolve by
     # probing the cache for the most recent panel this feed has written, and falling back to a
     # fetch when there is none.
-    cached = prices.cached_as_of_dates(feed_name)
+    # Keyed by span as well as date, so a 5-year and a 20-year panel cannot be confused.
+    cached = prices.cached_as_of_dates(feed_name, years=years)
     if cached and not refresh:
         bars, stats = prices.load_or_fetch(feed, tickers, cached[-1], years, refresh=False)
     else:
         bars = feed.fetch(tickers, years=years)
         stats = dict(getattr(feed, "stats", {}) or {})
-        prices.write_panel(bars, _data_as_of(bars), feed.name, stats=stats)
+        prices.write_panel(bars, prices.panel_key(_data_as_of(bars), years), feed.name,
+                           stats=stats)
         print(f"panel written: {bars.summary()}", flush=True)
 
     uni = universe.refine_universe(uni, bars.meta)
@@ -183,6 +191,53 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_horizon(args: argparse.Namespace) -> int:
+    """Measure the signal's rank IC and tail behaviour at 3 and 12 months.
+
+    Needs a long panel — the default 5 years leaves ~12 monthly rebalance dates once history and
+    forward-return room are taken out, which cannot settle anything. Use `--years 20`.
+    """
+    from . import horizon as H
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    close, adjclose, volume = bars.close[keep], bars.adjclose[keep], bars.volume[keep]
+    print(f"{len(keep)} names, {close.shape[0]} sessions from {close.index.min().date()}",
+          flush=True)
+
+    out = H.run(close, adjclose, volume)
+    print(f"\npanel {out['panel_rows']:,} rows over {out['n_dates']} dates "
+          f"({out['first_date']} .. {out['last_date']})", flush=True)
+    print("\nbase rates (gated cohort):", flush=True)
+    print(out["base_rates"].round(2).to_string(index=False), flush=True)
+    print("\nrank IC:", flush=True)
+    print(out["ic"].round(4).to_string(index=False), flush=True)
+
+    selection = out["selection"]
+    rows = []
+    for label in ("3m", "12m"):
+        rows.append({
+            "horizon": label,
+            "top_mean_%": 100 * selection[f"top_mean_{label}"].mean(),
+            "cohort_mean_%": 100 * selection[f"cohort_mean_{label}"].mean(),
+            "top_up50_%": 100 * selection[f"top_up50_{label}"].mean(),
+            "cohort_up50_%": 100 * selection[f"cohort_up50_{label}"].mean(),
+            "top_dn30_%": 100 * selection[f"top_dn30_{label}"].mean(),
+            "cohort_dn30_%": 100 * selection[f"cohort_dn30_{label}"].mean(),
+        })
+    table = pd.DataFrame(rows)
+    table["up_tail_lift_x"] = table["top_up50_%"] / table["cohort_up50_%"]
+    table["dn_tail_cut_x"] = table["cohort_dn30_%"] / table["top_dn30_%"]
+    print(f"\ntop-{out['top_n']} vs cohort:", flush=True)
+    print(table.round(2).to_string(index=False), flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    selection.to_csv(RESULTS / "horizon_selection_by_date.csv", index=False)
+    out["ic"].to_csv(RESULTS / "horizon_ic.csv", index=False)
+    print(f"\nwrote {RESULTS / 'horizon_ic.csv'} and horizon_selection_by_date.csv", flush=True)
+    print("The written verdict is results/horizon_test.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -226,6 +281,11 @@ def main(argv: list[str] | None = None) -> int:
     replay.add_argument("--months", type=int, default=12)
     replay.add_argument("--refresh", action="store_true")
     replay.set_defaults(func=cmd_replay)
+
+    horizon_cmd = sub.add_parser(
+        "horizon", help="rank IC and tail behaviour at 3m vs 12m (needs --years 20)")
+    horizon_cmd.add_argument("--refresh", action="store_true")
+    horizon_cmd.set_defaults(func=cmd_horizon)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)
