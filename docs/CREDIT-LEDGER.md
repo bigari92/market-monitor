@@ -12,8 +12,8 @@ Every dollar is accounted here against a named package or a named defect.
 | Repo exists locally | **yes** — first commit 2026-10-18, 52 files, clean tree |
 | Pushed to GitHub | **yes** — `bigari92/market-monitor`, PRIVATE, default branch `main`, 2026-10-18 |
 | Published content verified clean | **yes** — the remote tree (52 blobs) and *every* commit were scanned for personal filenames; none present, largest blob 9.5 KB. A push publishes all commits, not just the tip, so the history scan is the one that matters |
-| Cloud availability | still `no_readable_git_checkout` immediately after the push, for the reason in precondition 3 below. The session was then pointed at this folder; that move takes effect at the end of the turn, so the decisive probe happens on the next one |
-| Cloud environment confirmed | **still unknown.** The availability response reports only the first blocking reason, so `no_readable_git_checkout` masks whether an environment exists at all. It becomes visible once precondition 3 is satisfied |
+| Cloud availability | **`available: true`** once the session's project folder became this repo (2026-10-18). Listed as `market-monitor -> bigari92/market-monitor` |
+| Cloud environment confirmed | **yes** — one environment, `Default` (`hosted: true`, `isDefault: true`, `env_01LSggXGXzzEW1UYAbN3Ygcz`). All three preconditions cleared; the USD 90 is now spendable |
 
 ### Three preconditions, not one
 
