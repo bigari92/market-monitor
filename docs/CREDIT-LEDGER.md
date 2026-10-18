@@ -47,7 +47,7 @@ spent first and the rest is re-allocated against the real reading.**
 |---|---|---|---|---|
 | C0 | Burn-rate calibration: one deliberately trivial session. Prove the mechanism — repo, venv, incremental commits, tests green in a PR — and read the actual consumption | 5 | — | Nothing expensive may depend on an untested platform |
 | C1 | As-filed fundamentals from the SEC Financial Statement Data Sets (2009Q1–2026Q3), reduced to a committed parquet with a real filing date per row | 20 | — | Replaces the restatement-contaminated `frames` route; removes the 90-day-lag approximation |
-| C2 | **Block bootstrap** — re-run the whole factor search per resample against the reconstructed trial count | 25 | — | **KILL GATE: p > 0.10 on the best configuration ends the prediction half** |
+| C2 | **Block bootstrap** — re-run the whole factor search per resample against the reconstructed trial count | 25 | **run 2026-10-18** | **KILL GATE: PASSED.** p < 0.00005 at every block length and both horizons, against a pre-registered bar of 0.10. `results/c2_block_bootstrap.md` |
 | C3 | ~~Survivorship **bound**~~ **DONE, USD 0** — three severities reported beside the survivor-only baseline; delisting rate measured at 7.71%/yr from 30,809 Form 25 filings. `results/survivorship.md` | ~~15~~ **0** | 0.00 | The Form 25 test it was gated on passed, and the bound came with it. **USD 15 released.** |
 | C4 | Local review of everything the cloud committed | 0 | — | A cloud commit is a claim, not a result |
 | C5 | Reserve, releasable only against a named failing test | 25 | — | Every stage finds one defect |
@@ -57,15 +57,19 @@ spent first and the rest is re-allocated against the real reading.**
 1. **Nothing is spent until the free local gates have had their chance to end the project.**
    Stage 3 of the plan — reproduce, Newey-West on the actual IC series, the trials ledger, real
    costs — costs nothing and is the likeliest route to a verdict of "do not continue".
-2. **C2 is a gate, not a line item.** Its kill condition is written above, before it runs.
+2. **C2 is a gate, not a line item.** Its kill condition was written above before it ran, and
+   the gate's machinery plus the rule for reading it were committed (`ab5f6f7`) before the
+   result existed. **It passed on 2026-10-18.** The prediction half continues.
 3. The reserve is not a slush fund. Releasing it requires naming the failing test.
-5. **Spend C2 next, and spend nothing else first.** C1 and C3 are done for USD 0, so USD 47
-   remains against a C2 price of USD 25. C2 is the designated kill gate, and every other figure
-   this project has measured is provisional until it runs. **Sharadar at USD 199/yr is 4.2x the
-   remaining balance and must wait for C2 to pass** — `results/survivorship.md` §6.
-6. **One session's worth of money is left.** At the measured USD 43/session, USD 47 funds
-   roughly one more session of this size. C2 should be that session, and it should be scoped to
-   C2 alone.
+5. **C2 has run and passed, so the ordering is now: nothing, then Sharadar if wanted.** C1 and
+   C3 came in at USD 0 and C2 is done, so all five packages are discharged. **Sharadar at
+   USD 199/yr was conditional on C2 passing and that condition is met** — it would convert the
+   survivorship bound into a measurement (`results/survivorship.md` §6). It remains 4.2x the
+   remaining balance and a session must never buy it.
+6. **The remaining USD 47 is unallocated.** At the measured ~USD 43/session it is roughly one
+   more session. No package needs it; the highest-value use is probably nothing at all for a
+   while, because the one thing the project now needs most is **elapsed time** — the forward
+   tracking record is one run long and costs nothing to accumulate.
 4. If a session overruns its package, it stops and records the overrun here rather than
    continuing on the next package's money.
 

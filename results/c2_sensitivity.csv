@@ -1,0 +1,7 @@
+assumed_trials,p_reality_check,p_sd_across_subsets,passes
+1,0.0,0.0,True
+5,0.0,0.0,True
+10,0.0,0.0,True
+20,0.0,0.0,True
+40,0.0,0.0,True
+40,0.0,0.0,True

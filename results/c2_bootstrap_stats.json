@@ -1,0 +1,143 @@
+{
+  "n_dates": 190,
+  "n_configs": 40,
+  "reconstructed_trials": {
+    "documented_total": 62,
+    "by_script": {
+      "run_backtest.py: single-factor rank IC": 8,
+      "run_asymmetry.py: factors tested in the high-vol cohort": 15,
+      "run_algo.py: composite variants A/B/C": 3,
+      "run_algo_v3.py: v2 / v3 / v3-strict": 3,
+      "run_algo_v4.py: v2-z plus four v4 modes": 5,
+      "run_concentration.py: 4 top-N levels x 3 modes": 12,
+      "horizon_test.py: 3-month and 12-month horizons": 2,
+      "retest_fundamentals.py: fundamental factors IC'd": 10,
+      "run_model.py / run_model2.py: 2 models, 2 label thresholds": 4
+    },
+    "uncounted": "the eight weights in PRICE_W are chosen values (1.0 / 0.75 / 0.5 / -0.75). Choosing them implies a search whose size was never recorded, and FUND_W's weights were set from residual IC measured on the same data, which is a fit rather than a trial but spends the same degrees of freedom.",
+    "treat_as": "a floor; report p against assumed counts well above it"
+  },
+  "reality_check": {
+    "12-month (validated horizon)|block6": {
+      "best_config": "m:rank_fund",
+      "observed_best": 0.158504,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 6,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    },
+    "12-month (validated horizon)|block12": {
+      "best_config": "m:rank_fund",
+      "observed_best": 0.158504,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 12,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    },
+    "12-month (validated horizon)|block24": {
+      "best_config": "m:rank_fund",
+      "observed_best": 0.158504,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 24,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    },
+    "3-month (better identified)|block6": {
+      "best_config": "-f:vol_6m",
+      "observed_best": 0.100688,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 6,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    },
+    "3-month (better identified)|block12": {
+      "best_config": "-f:vol_6m",
+      "observed_best": 0.100688,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 12,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    },
+    "3-month (better identified)|block24": {
+      "best_config": "-f:vol_6m",
+      "observed_best": 0.100688,
+      "n_configs": 40,
+      "n_periods": 190,
+      "block_length": 24,
+      "n_resamples": 5000,
+      "p_single_config": 0.0,
+      "p_reality_check": 0.0,
+      "passes": true
+    }
+  },
+  "sensitivity": [
+    {
+      "assumed_trials": 1,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    },
+    {
+      "assumed_trials": 5,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    },
+    {
+      "assumed_trials": 10,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    },
+    {
+      "assumed_trials": 20,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    },
+    {
+      "assumed_trials": 40,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    },
+    {
+      "assumed_trials": 40,
+      "p_reality_check": 0.0,
+      "p_sd_across_subsets": 0.0,
+      "passes": true
+    }
+  ],
+  "top_configs_12m": {
+    "m:rank_fund": 0.1585,
+    "-f:vol_6m": 0.1499,
+    "-f:vol_12m": 0.14915,
+    "m:price": 0.14753,
+    "-f:price": 0.13686,
+    "m:both": 0.13432,
+    "m:filter": 0.13375,
+    "f:pct_of_52w_high": 0.12504,
+    "f:max_dd_12m": 0.12266,
+    "-f:skew_12m": 0.08119,
+    "f:days_above_ma200": 0.07919,
+    "f:adv_3m_usd": 0.07426,
+    "f:mom_36": 0.06389,
+    "f:mom_12_1": 0.0628,
+    "f:px_vs_ma200": 0.06179
+  }
+}

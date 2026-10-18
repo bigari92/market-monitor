@@ -179,9 +179,15 @@ but it changes what the record means, so it is recorded per run in `runs.csv`.
    rate above 78% to erase the post-cost edge. It remains structural, but it is no longer the
    thing most likely to be wrong.
 
-7. **C2 — the block bootstrap — is now the binding item, and it is the designated kill gate.**
-   *"p > 0.10 on the best configuration ends the prediction half."* The weight vector came from
-   a factor search whose multiple-testing bar has never been scored, so **until C2 runs, none of
-   the measured figures is established** — bounded, cost-adjusted or otherwise. It costs USD 25
-   against USD 47 remaining, so it fits, and it should be the next money spent.
-   **Sharadar (USD 199/yr) should wait for C2 to pass** — see `results/survivorship.md` §6.
+7. ~~**C2 — the block bootstrap.**~~ **PASSED** — `results/c2_block_bootstrap.md`. p < 0.00005
+   at every block length and both horizons against a pre-registered bar of 0.10; the observed
+   mean IC exceeds the largest of 20,000 null maxima. So the ordering ability is **not** an
+   artefact of the search that produced the weight vector. It establishes that and no more: the
+   ~15 independent observations, the survivorship bias on IC (whose direction is not even
+   signable) and the 16–29% cost haircut all stand.
+
+8. **Elapsed time is now the binding constraint, and it is free.** All five credit packages are
+   discharged and USD 47 is unallocated. The forward tracking record is **one run long**, it is
+   the only unbiased dataset this project will own, and nothing substitutes for letting it
+   accumulate. **Sharadar (USD 199/yr) is now a reasonable purchase** — its condition was C2
+   passing — but it buys back the *past*, and the record buys the future for nothing.
