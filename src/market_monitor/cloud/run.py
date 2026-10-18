@@ -347,6 +347,68 @@ def cmd_modes(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cost(args: argparse.Namespace) -> int:
+    """Execution cost for the strategy as configured. RECOVERY.md defect 4.
+
+    Needs a panel with high/low (the spread estimators reconstruct a spread from the daily
+    range), and the replay record for measured turnover.
+    """
+    from . import cost as C
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    C.require_high_low(bars)
+    as_of = _data_as_of(bars)
+    factor_frame = F.compute_factors(bars.close[keep], bars.volume[keep], as_of,
+                                     adjclose=bars.adjclose[keep])
+    gated = signal.score(factor_frame)
+    top = gated.head(signal.TOP_N)
+
+    print(f"\nspread by group (bps, {C.DEFAULT_WINDOW}d window):", flush=True)
+    for label, tickers in (("whole scorable universe", list(factor_frame.index)),
+                           ("after price + liquidity floors",
+                            list(signal.apply_gates(factor_frame, vol_gate=None).index)),
+                           ("gated cohort (ranked)", list(gated.index)),
+                           ("top N (bought)", list(top.index))):
+        est = C.spread_estimates(bars, as_of, tickers)
+        print(f"  {label:34s} n={len(est):5d}  CS={est['cs_bps'].median():6.1f}  "
+              f"AR={est['ar_bps'].median():6.1f}  used={est['used_bps'].median():6.1f}",
+              flush=True)
+
+    spread = float(C.spread_estimates(bars, as_of, list(top.index))["used_bps"].median())
+    daily_vol = float(top["vol_12m"].median() / (252 ** 0.5))
+
+    replay_runs = RESULTS / "replay" / "runs.csv"
+    turnover = C.measure_turnover(pd.read_csv(replay_runs)) if replay_runs.exists() else {}
+    annual_turnover = turnover.get("annual_turnover", 1.0)
+    print(f"\nturnover, measured: {json.dumps(turnover)}", flush=True)
+
+    schedule = C.CommissionSchedule()
+    rows = []
+    for portfolio in (10_000, 50_000, 250_000, 1_000_000):
+        one_way = C.commission_bps_for_portfolio(top["price"], portfolio, signal.TOP_N,
+                                                 schedule)
+        impact = C.impact_bps(portfolio / signal.TOP_N, top["adv_3m_usd"], daily_vol)
+        round_trip = C.round_trip_bps(one_way, spread, impact)
+        rows.append({"portfolio_usd": portfolio, "commission_1way_bps": one_way,
+                     "spread_bps": spread, "impact_1way_bps": impact,
+                     "round_trip_bps": round_trip,
+                     "drag_at_1x_pp": C.annual_drag_bps(round_trip, 1.0) / 100,
+                     "drag_at_measured_turnover_pp":
+                         C.annual_drag_bps(round_trip, annual_turnover) / 100})
+    print(f"\ncost by portfolio size (turnover {annual_turnover}x):", flush=True)
+    print(pd.DataFrame(rows).round(2).to_string(index=False), flush=True)
+
+    print("\nbreak-even round-trip cost (bps), independent of any spread estimate:", flush=True)
+    for label, turn, gross in (("12-month hold", 1.0, 11.875),
+                               ("as configured", annual_turnover, 15.31)):
+        print(f"  {label:16s} turnover {turn:5.2f}x  gross {gross:5.2f}pp  "
+              f"break-even {C.break_even_cost_bps(gross, turn):7.1f} bps", flush=True)
+
+    print("\n" + C.TAX_IS_OUT_OF_SCOPE, flush=True)
+    print("\nThe written verdict is results/cost_model.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -406,6 +468,11 @@ def main(argv: list[str] | None = None) -> int:
         "modes", help="measure the 4 pre-specified algo_v4 configs (does NOT change the signal)")
     modes.add_argument("--refresh", action="store_true")
     modes.set_defaults(func=cmd_modes)
+
+    cost_cmd = sub.add_parser(
+        "cost", help="execution cost: spread, commission, impact, measured turnover")
+    cost_cmd.add_argument("--refresh", action="store_true")
+    cost_cmd.set_defaults(func=cmd_cost)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)

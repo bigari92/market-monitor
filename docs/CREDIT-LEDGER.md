@@ -84,12 +84,12 @@ What *is* measurable from inside, as a proxy for the next session's planner:
 
 | | |
 |---|---|
-| Wall-clock, end to end | ~2h 15m |
-| Full-universe price sweeps | 3 — two 5-year (149s, 150s) and one 20-year (179s). ~2 GB fetched, **0 failures across 21,477 requests** |
+| Wall-clock, end to end | ~3h |
+| Full-universe price sweeps | 4 — two 5-year (149s, 150s) and two 20-year (179s, 221s; the second adds daily high/low for the spread estimators). ~3 GB fetched, **0 failures across 28,638 requests** |
 | 24-month replay over the cached panel | 1, ~90s |
 | Horizon test: 190 rebalance dates scored at two horizons | 1, ~6 min |
-| Test suite runs | 16 (12 tests at start → 99 at end) |
-| Commits pushed | 9 |
+| Test suite runs | 21 (12 tests at start → 120 at end) |
+| Commits pushed | 11 |
 | Peak disk for the cached panel | 270 MB price panel + 63 MB SEC facts (gitignored) |
 | SEC Financial Statement Data Sets | 70 quarterly zips, ~5 GB downloaded, stream-filtered and deleted; 3.37M facts kept |
 | **Data cost** | **USD 0.00 — every source used is free** |

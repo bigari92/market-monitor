@@ -91,7 +91,7 @@ SEC company_tickers_exchange.json      10,444 rows
 | 1. Survivor-only universe | **Structural for backtests; void forward.** The tracker records point-in-time and keeps exits, so its own history is unbiased. Sharadar is priced in `feeds/sharadar.py` for the backtest case. |
 | 2. `auto_adjust=True` hides corporate actions | **Fixed at the source.** The raw endpoint returns `close`, `adjclose` and the split/dividend tables; 60,889 actions captured. Trend reads `close`, momentum reads `adjclose`. |
 | 3. 12× overlapping forward returns | **Not applicable.** The tracker computes no forward return. It is also why §3 reports no performance. |
-| 4. No cost model | **Open, and the tracker does not need one** — it places no orders and reports no returns. It becomes required the moment anyone computes a P&L from this record. |
+| 4. No cost model | **Closed** — `results/cost_model.md`. Spread estimated by two published estimators (converging at 96–99 bps on the top 25), commission from a published rate card, impact scaled by the cohort's own volatility, and turnover **measured** at 3.25×/yr from the replay record. Execution cost is 1.0–1.9pp a year for a 12-month hold and 3.2–6.1pp as configured, against 2.7–13× break-even headroom. Tax stays out of scope by design (CLOUD-RULES.md §3). |
 
 ## 5. Running it
 
@@ -129,12 +129,16 @@ magnitude, is the binding constraint — and it is the reason the published t-st
 recovered research were inflated 3.4×.
 
 **Monthly review is not monthly trading**, and that distinction is what makes the cadence safe.
-A 3-month *holding* period would mean ~4× the turnover, and nothing in this project deducts
-commission, spread or tax (RECOVERY.md defect 4 is open), so the horizon test's gross figures
-cannot say that quarterly rebalancing beats annual net of costs — and it does not claim to. The
-exit rules fire on structural breaks rather than rank drift, so a listing stays a long-horizon
-thesis that gets *checked* often. The 24-month replay confirms the shape: 4–13 exits a month from
-a watchlist of 28–38, not wholesale rotation.
+The exit rules fire on structural breaks rather than rank drift, so a listing stays a
+long-horizon thesis that gets *checked* often. The 24-month replay confirms the shape: 4–13 exits
+a month from a watchlist of 28–38, not wholesale rotation.
+
+**The cost model now closes this loop, and it sharpens the point.** Measured turnover is
+**3.25×/yr** — an average holding period of 3.7 months, not 12 — and that costs 3× what a
+12-month hold costs: 21–40% of the gross excess against 8–16%. Net of costs the two cadences are
+a wash, so the 3-month horizon's higher gross excess buys nothing once paid for. Monthly review
+remains right; **the conservative exit rules are load-bearing, and loosening them would trade
+real money for noise.** See `results/cost_model.md` §5.
 
 Weekly is not supported: nothing measured speaks to horizons under 63 trading days, and the exit
 rules are built to ignore the rank noise a weekly cadence would surface.
@@ -164,6 +168,13 @@ but it changes what the record means, so it is recorded per run in `runs.csv`.
    `screen_v4.py`'s industry-momentum *overlay* stays omitted and `signal_version` still
    hashes `industry_overlay: false`, because turning it on would change the signal.
 
-5. **A cost model.** RECOVERY.md defect 4 is the last one still fully open, and it is the thing
-   that would let a net-of-cost question be answered at all — including whether the monthly
-   cadence's turnover is affordable (`results/horizon_test.md` §6 can only speak gross).
+5. ~~**A cost model.**~~ **Done** — `results/cost_model.md`. The answer changed a conclusion:
+   net of costs, the faster cadence wins nothing. The tracker's measured 3.25× turnover gives up
+   21–40% of its gross excess against 8–16% for a 12-month hold, and the 3-month horizon's
+   higher gross excess is almost exactly consumed by it. **Monthly review stays right, and the
+   conservative exit rules turn out to be load-bearing rather than merely defensible.**
+
+6. **Survivorship is now the binding defect.** It is the only one of the four still structural,
+   it cannot be fixed by being careful, and every net figure in `results/cost_model.md` inherits
+   it. `feeds/sharadar.py` is priced and ready; this is the one place money would buy a real
+   answer rather than a convenience.

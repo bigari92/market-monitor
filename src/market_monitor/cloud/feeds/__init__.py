@@ -45,6 +45,9 @@ class Bars:
     volume   : wide, dates x tickers. Share volume, split-adjusted to match `close`.
     events   : long [ticker, date, kind, value]; kind in {"split", "dividend"}.
     meta     : one row per ticker [ticker, exchange, instrument_type, currency, bars, first, last].
+    high/low : wide, split-adjusted daily extremes. Needed only by the spread estimators in
+               `cost.py`, which reconstruct an effective bid-ask spread from the daily range
+               because no free feed carries quotes. None on a panel fetched before they existed.
     """
 
     close: pd.DataFrame
@@ -52,6 +55,11 @@ class Bars:
     volume: pd.DataFrame
     events: pd.DataFrame
     meta: pd.DataFrame
+    # Optional, and optional on purpose: panels cached before the cost model existed have no
+    # high/low, and a missing pair must degrade to "no spread estimate" rather than breaking a
+    # ranking run. `cost.require_high_low` is what refuses when an estimator actually needs them.
+    high: pd.DataFrame | None = None
+    low: pd.DataFrame | None = None
 
     def __post_init__(self) -> None:
         if self.close.empty or self.close.shape[1] == 0:

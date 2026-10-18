@@ -125,7 +125,11 @@ class YahooChartFeed:
         frame = pd.DataFrame(
             {"close": closes,
              "adjclose": adj_block.get("adjclose") or closes,
-             "volume": quote.get("volume") or [None] * len(stamps)},
+             "volume": quote.get("volume") or [None] * len(stamps),
+             # High and low feed the spread estimators in cost.py. They cost nothing extra:
+             # the endpoint already returns them in the same payload.
+             "high": quote.get("high") or [None] * len(stamps),
+             "low": quote.get("low") or [None] * len(stamps)},
             index=index,
         )
         # A duplicated session date means the partial in-progress bar arrived alongside the
@@ -220,10 +224,15 @@ class YahooChartFeed:
         close = pd.DataFrame({r["ticker"]: r["frame"]["close"] for r in ok}).sort_index()
         adjclose = pd.DataFrame({r["ticker"]: r["frame"]["adjclose"] for r in ok}).sort_index()
         volume = pd.DataFrame({r["ticker"]: r["frame"]["volume"] for r in ok}).sort_index()
+        high = pd.DataFrame({r["ticker"]: r["frame"]["high"] for r in ok}).sort_index() \
+            if "high" in ok[0]["frame"].columns else None
+        low = pd.DataFrame({r["ticker"]: r["frame"]["low"] for r in ok}).sort_index() \
+            if "low" in ok[0]["frame"].columns else None
         events = pd.DataFrame([e for r in ok for e in r["events"]],
                               columns=["ticker", "date", "kind", "value"])
         meta = pd.DataFrame([r["meta"] for r in ok])
-        return Bars(close=close, adjclose=adjclose, volume=volume, events=events, meta=meta)
+        return Bars(close=close, adjclose=adjclose, volume=volume, events=events, meta=meta,
+                    high=high, low=low)
 
     @staticmethod
     def _tally(records: list[dict], started: float, requested: list[str],
