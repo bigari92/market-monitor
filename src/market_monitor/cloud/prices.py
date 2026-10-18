@@ -22,6 +22,8 @@ from .feeds import Bars, FeedEmptyError, PriceFeed
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 
 _WIDE = ("close", "adjclose", "volume")
+# Written when the feed supplied them; absent in panels cached before the cost model existed.
+_OPTIONAL_WIDE = ("high", "low")
 
 
 def cache_dir(as_of: str, feed_name: str, root: Path | None = None) -> Path:
@@ -71,6 +73,10 @@ def write_panel(bars: Bars, as_of: str, feed_name: str, root: Path | None = None
 
     for name in _WIDE:
         getattr(bars, name).to_parquet(staging / f"{name}.parquet")
+    for name in _OPTIONAL_WIDE:
+        frame = getattr(bars, name, None)
+        if frame is not None:
+            frame.to_parquet(staging / f"{name}.parquet")
     bars.events.to_parquet(staging / "events.parquet")
     bars.meta.to_parquet(staging / "meta.parquet")
     (staging / "fetch_stats.json").write_text(
@@ -89,6 +95,9 @@ def read_panel(as_of: str, feed_name: str, root: Path | None = None) -> Bars:
     if not source.is_dir():
         raise FileNotFoundError(f"no cached panel at {source}")
     frames = {name: pd.read_parquet(source / f"{name}.parquet") for name in _WIDE}
+    for name in _OPTIONAL_WIDE:
+        path = source / f"{name}.parquet"
+        frames[name] = pd.read_parquet(path) if path.is_file() else None
     return Bars(events=pd.read_parquet(source / "events.parquet"),
                 meta=pd.read_parquet(source / "meta.parquet"), **frames)
 

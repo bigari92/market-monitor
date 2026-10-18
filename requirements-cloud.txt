@@ -1,0 +1,16 @@
+# The cloud path's dependencies — deliberately NOT requirements.txt.
+#
+# requirements.txt pins yfinance==1.7.0 for the owner's local tooling. Installing it on an
+# automated runner would be slow, pointless and a standing invitation to import it on a cloud
+# path, which CLOUD-RULES.md §2 bans and tests/test_no_yfinance_in_cloud_paths.py enforces.
+# duckdb is also absent: nothing under src/market_monitor/cloud/ imports it.
+#
+# This is the complete set reachable from src/market_monitor/cloud/ — verified by walking the
+# import graph, not by guessing.
+
+pandas==2.3.3
+numpy==2.3.4
+pyarrow==24.0.0
+requests==2.32.5
+
+pytest==9.1.1

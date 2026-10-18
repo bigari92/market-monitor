@@ -1,0 +1,463 @@
+{
+  "as_of": "2026-10-16",
+  "spread_top25_bps": 116.93469974100165,
+  "spread_hist_median_bps": 88.74217191110843,
+  "cohort_daily_vol": 0.04384852605331019,
+  "turnover": {
+    "runs": 23,
+    "mean_watchlist": 31.3,
+    "mean_exits_per_run": 8.35,
+    "monthly_exit_rate": 0.2709,
+    "annual_turnover": 3.251,
+    "implied_holding_months": 3.7
+  },
+  "spread_by_group": [
+    {
+      "group": "whole scorable universe",
+      "n": 5791,
+      "cs_median": 90.7494302321378,
+      "ar_median": 64.57384609670855,
+      "used_median": 103.68449153765042,
+      "used_p75": 199.280252441619,
+      "used_p90": 306.73078231273297
+    },
+    {
+      "group": "after price + liquidity floors",
+      "n": 2697,
+      "cs_median": 73.6968667191273,
+      "ar_median": 52.7186971348704,
+      "used_median": 79.46787868032851,
+      "used_p75": 111.32768938400376,
+      "used_p90": 152.8188897435236
+    },
+    {
+      "group": "gated cohort (what is ranked)",
+      "n": 540,
+      "cs_median": 137.2704619085603,
+      "ar_median": 82.85614584405855,
+      "used_median": 144.8148453956083,
+      "used_p75": 185.72753161312187,
+      "used_p90": 235.1443999662432
+    },
+    {
+      "group": "top 25 (what is bought)",
+      "n": 25,
+      "cs_median": 99.1391026166715,
+      "ar_median": 96.07432401351296,
+      "used_median": 116.93469974100165,
+      "used_p75": 144.79952311568698,
+      "used_p90": 163.54097618993399
+    }
+  ],
+  "stability": [
+    {
+      "as_of": "2012-10-15",
+      "n": 25,
+      "cs": 85.7543847488746,
+      "ar": 0.0,
+      "used": 87.48303549468535
+    },
+    {
+      "as_of": "2013-10-15",
+      "n": 25,
+      "cs": 79.91153378564692,
+      "ar": 48.908199302151544,
+      "used": 81.6506093325679
+    },
+    {
+      "as_of": "2014-10-15",
+      "n": 25,
+      "cs": 74.50614666566219,
+      "ar": 0.0,
+      "used": 74.50614666566219
+    },
+    {
+      "as_of": "2015-10-15",
+      "n": 25,
+      "cs": 85.02857768955542,
+      "ar": 0.0,
+      "used": 88.74217191110843
+    },
+    {
+      "as_of": "2016-10-14",
+      "n": 25,
+      "cs": 84.49979139385749,
+      "ar": 22.197636524165404,
+      "used": 86.76507499592843
+    },
+    {
+      "as_of": "2017-10-13",
+      "n": 25,
+      "cs": 74.24322310980418,
+      "ar": 18.938557000114844,
+      "used": 74.24322310980418
+    },
+    {
+      "as_of": "2018-10-15",
+      "n": 25,
+      "cs": 81.41740513827186,
+      "ar": 0.0,
+      "used": 81.41740513827186
+    },
+    {
+      "as_of": "2019-10-15",
+      "n": 25,
+      "cs": 80.66535878471767,
+      "ar": 25.619490308236376,
+      "used": 80.66535878471767
+    },
+    {
+      "as_of": "2020-10-15",
+      "n": 25,
+      "cs": 136.74545535365374,
+      "ar": 113.11351817365257,
+      "used": 153.73000158111105
+    },
+    {
+      "as_of": "2021-10-15",
+      "n": 25,
+      "cs": 146.50722233264918,
+      "ar": 74.25746454683294,
+      "used": 151.20145611501405
+    },
+    {
+      "as_of": "2022-10-14",
+      "n": 25,
+      "cs": 133.76114985898997,
+      "ar": 43.02948751922158,
+      "used": 134.50077494238812
+    },
+    {
+      "as_of": "2023-10-13",
+      "n": 25,
+      "cs": 112.46909150684226,
+      "ar": 0.0,
+      "used": 118.82779287406633
+    },
+    {
+      "as_of": "2024-10-15",
+      "n": 25,
+      "cs": 98.87644881774055,
+      "ar": 0.0,
+      "used": 101.37375291431042
+    },
+    {
+      "as_of": "2025-10-15",
+      "n": 25,
+      "cs": 119.78550232863454,
+      "ar": 45.70254277710187,
+      "used": 121.34373985009299
+    },
+    {
+      "as_of": "2026-10-15",
+      "n": 25,
+      "cs": 96.04296598661175,
+      "ar": 90.29893680339866,
+      "used": 113.62498950450286
+    }
+  ],
+  "commission": [
+    {
+      "portfolio_usd": 10000,
+      "position_usd": 400.0,
+      "commission_bps_one_way": 25.0
+    },
+    {
+      "portfolio_usd": 25000,
+      "position_usd": 1000.0,
+      "commission_bps_one_way": 10.0
+    },
+    {
+      "portfolio_usd": 50000,
+      "position_usd": 2000.0,
+      "commission_bps_one_way": 5.050941035464181
+    },
+    {
+      "portfolio_usd": 100000,
+      "position_usd": 4000.0,
+      "commission_bps_one_way": 2.7215422076028495
+    },
+    {
+      "portfolio_usd": 250000,
+      "position_usd": 10000.0,
+      "commission_bps_one_way": 1.5072098666947569
+    },
+    {
+      "portfolio_usd": 1000000,
+      "position_usd": 40000.0,
+      "commission_bps_one_way": 1.0584854826545744
+    }
+  ],
+  "impact": [
+    {
+      "portfolio_usd": 10000,
+      "impact_bps_one_way": 0.5181629669791279
+    },
+    {
+      "portfolio_usd": 100000,
+      "impact_bps_one_way": 1.638575174804662
+    },
+    {
+      "portfolio_usd": 1000000,
+      "impact_bps_one_way": 5.181629669791279
+    }
+  ],
+  "drag": [
+    {
+      "portfolio_usd": 10000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "converged (504d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 25.0,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 0.5181629669791279,
+      "round_trip_bps": 139.77849784506668,
+      "annual_drag_pp": 1.3977849784506668,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.477215021549334,
+      "drag_share_of_gross_%": 11.77082087116351
+    },
+    {
+      "portfolio_usd": 10000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "conservative (21d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 25.0,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 0.5181629669791279,
+      "round_trip_bps": 186.40087215198542,
+      "annual_drag_pp": 1.8640087215198542,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.010991278480146,
+      "drag_share_of_gross_%": 15.696915549640877
+    },
+    {
+      "portfolio_usd": 10000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "converged (504d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 25.0,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 0.5181629669791279,
+      "round_trip_bps": 139.77849784506668,
+      "annual_drag_pp": 4.544198964943118,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 10.763801035056883,
+      "drag_share_of_gross_%": 29.685125195604375
+    },
+    {
+      "portfolio_usd": 10000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "conservative (21d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 25.0,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 0.5181629669791279,
+      "round_trip_bps": 186.40087215198542,
+      "annual_drag_pp": 6.059892353661046,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 9.248107646338955,
+      "drag_share_of_gross_%": 39.586440773850576
+    },
+    {
+      "portfolio_usd": 50000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "converged (504d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 5.050941035464181,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 1.158647617588309,
+      "round_trip_bps": 101.16134921721341,
+      "annual_drag_pp": 1.011613492172134,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.863386507827865,
+      "drag_share_of_gross_%": 8.518850460396918
+    },
+    {
+      "portfolio_usd": 50000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "conservative (21d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 5.050941035464181,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 1.158647617588309,
+      "round_trip_bps": 147.78372352413214,
+      "annual_drag_pp": 1.4778372352413214,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.39716276475868,
+      "drag_share_of_gross_%": 12.444945138874285
+    },
+    {
+      "portfolio_usd": 50000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "converged (504d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 5.050941035464181,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 1.158647617588309,
+      "round_trip_bps": 101.16134921721341,
+      "annual_drag_pp": 3.2887554630516083,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 12.019244536948392,
+      "drag_share_of_gross_%": 21.483900333496265
+    },
+    {
+      "portfolio_usd": 50000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "conservative (21d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 5.050941035464181,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 1.158647617588309,
+      "round_trip_bps": 147.78372352413214,
+      "annual_drag_pp": 4.804448851769536,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 10.503551148230464,
+      "drag_share_of_gross_%": 31.38521591174246
+    },
+    {
+      "portfolio_usd": 250000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "converged (504d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 1.5072098666947569,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 2.5908148348956397,
+      "round_trip_bps": 96.93822131428922,
+      "annual_drag_pp": 0.9693822131428922,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.905617786857107,
+      "drag_share_of_gross_%": 8.163218636992777
+    },
+    {
+      "portfolio_usd": 250000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "conservative (21d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 1.5072098666947569,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 2.5908148348956397,
+      "round_trip_bps": 143.56059562120794,
+      "annual_drag_pp": 1.4356059562120793,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.439394043787921,
+      "drag_share_of_gross_%": 12.089313315470141
+    },
+    {
+      "portfolio_usd": 250000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "converged (504d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 1.5072098666947569,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 2.5908148348956397,
+      "round_trip_bps": 96.93822131428922,
+      "annual_drag_pp": 3.1514615749275423,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 12.156538425072458,
+      "drag_share_of_gross_%": 20.58702361462988
+    },
+    {
+      "portfolio_usd": 250000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "conservative (21d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 1.5072098666947569,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 2.5908148348956397,
+      "round_trip_bps": 143.56059562120794,
+      "annual_drag_pp": 4.66715496364547,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 10.64084503635453,
+      "drag_share_of_gross_%": 30.48833919287608
+    },
+    {
+      "portfolio_usd": 1000000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "converged (504d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 1.0584854826545744,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 5.181629669791279,
+      "round_trip_bps": 101.22240221600013,
+      "annual_drag_pp": 1.0122240221600014,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.862775977839998,
+      "drag_share_of_gross_%": 8.523991765557906
+    },
+    {
+      "portfolio_usd": 1000000,
+      "strategy": "12-month hold (as validated)",
+      "spread_case": "conservative (21d)",
+      "turnover": 1.0,
+      "commission_1way_bps": 1.0584854826545744,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 5.181629669791279,
+      "round_trip_bps": 147.84477652291886,
+      "annual_drag_pp": 1.4784477652291885,
+      "gross_excess_pp": 11.875,
+      "net_excess_pp": 10.396552234770812,
+      "drag_share_of_gross_%": 12.450086444035273
+    },
+    {
+      "portfolio_usd": 1000000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "converged (504d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 1.0584854826545744,
+      "spread_bps": 88.74217191110843,
+      "impact_1way_bps": 5.181629669791279,
+      "round_trip_bps": 101.22240221600013,
+      "annual_drag_pp": 3.2907402960421646,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 12.017259703957835,
+      "drag_share_of_gross_%": 21.4968663185404
+    },
+    {
+      "portfolio_usd": 1000000,
+      "strategy": "tracker as configured (measured)",
+      "spread_case": "conservative (21d)",
+      "turnover": 3.251,
+      "commission_1way_bps": 1.0584854826545744,
+      "spread_bps": 135.36454621802716,
+      "impact_1way_bps": 5.181629669791279,
+      "round_trip_bps": 147.84477652291886,
+      "annual_drag_pp": 4.8064336847600915,
+      "gross_excess_pp": 15.308,
+      "net_excess_pp": 10.50156631523991,
+      "drag_share_of_gross_%": 31.398181896786593
+    }
+  ],
+  "break_even": [
+    {
+      "strategy": "12-month hold",
+      "turnover": 1.0,
+      "gross_excess_pp": 11.875,
+      "break_even_round_trip_bps": 1187.5,
+      "converged_round_trip_bps": 88.74217191110843,
+      "conservative_round_trip_bps": 135.36454621802716,
+      "headroom_vs_converged_x": 13.381461986185093,
+      "headroom_vs_conservative_x": 8.77260725335963
+    },
+    {
+      "strategy": "tracker as configured",
+      "turnover": 3.251,
+      "gross_excess_pp": 15.308,
+      "break_even_round_trip_bps": 470.8705013841895,
+      "converged_round_trip_bps": 88.74217191110843,
+      "conservative_round_trip_bps": 135.36454621802716,
+      "headroom_vs_converged_x": 5.306051128158692,
+      "headroom_vs_conservative_x": 3.4785364007040225
+    },
+    {
+      "strategy": "tracker, on the 12m excess",
+      "turnover": 3.251,
+      "gross_excess_pp": 11.875,
+      "break_even_round_trip_bps": 365.27222393109815,
+      "converged_round_trip_bps": 88.74217191110843,
+      "conservative_round_trip_bps": 135.36454621802716,
+      "headroom_vs_converged_x": 4.116106424541709,
+      "headroom_vs_conservative_x": 2.6984334830389516
+    }
+  ]
+}

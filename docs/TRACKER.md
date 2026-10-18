@@ -88,10 +88,10 @@ SEC company_tickers_exchange.json      10,444 rows
 
 | RECOVERY.md defect | status |
 |---|---|
-| 1. Survivor-only universe | **Structural for backtests; void forward.** The tracker records point-in-time and keeps exits, so its own history is unbiased. Sharadar is priced in `feeds/sharadar.py` for the backtest case. |
+| 1. Survivor-only universe | **Bounded, not fixed** — `results/survivorship.md`. Delisting rate measured at **7.71%/yr** from 30,809 Form 25 filings, which overstates the measured edge by **8.4%**; the edge survives even at four times that rate. Still structural for backtests, and void forward (the tracker records point-in-time and keeps exits). The free route is blocked at the symbol: SEC clears a delisted company's ticker, so there is nothing to ask a price feed for. |
 | 2. `auto_adjust=True` hides corporate actions | **Fixed at the source.** The raw endpoint returns `close`, `adjclose` and the split/dividend tables; 60,889 actions captured. Trend reads `close`, momentum reads `adjclose`. |
 | 3. 12× overlapping forward returns | **Not applicable.** The tracker computes no forward return. It is also why §3 reports no performance. |
-| 4. No cost model | **Open, and the tracker does not need one** — it places no orders and reports no returns. It becomes required the moment anyone computes a P&L from this record. |
+| 4. No cost model | **Closed** — `results/cost_model.md`. Spread estimated by two published estimators (converging at 96–99 bps on the top 25), commission from a published rate card, impact scaled by the cohort's own volatility, and turnover **measured** at 3.25×/yr from the replay record. Execution cost is 1.0–1.9pp a year for a 12-month hold and 3.2–6.1pp as configured, against 2.7–13× break-even headroom. Tax stays out of scope by design (CLOUD-RULES.md §3). |
 
 ## 5. Running it
 
@@ -111,6 +111,49 @@ could not (see the commit log). It writes to `results/replay/` and never touches
 First run takes ~150s to fetch; afterwards the panel is cached in `data/panels/` (gitignored,
 ~2s to read). `data/` is never committed; the ranking is what gets committed, and it is small.
 
+## 5a. The monthly run is automated
+
+`.github/workflows/monthly-tracker.yml` runs the tracker at **06:17 UTC on the 1st** of each
+month — after the previous month's final US close, so the panel's last session is that month
+end. It installs `requirements-cloud.txt`, runs the test suite, runs
+`run --years 5 track`, and commits the appended `results/tracking/` back to the branch.
+
+**It is a GitHub Action, not a scheduled Claude session, and that is deliberate.** The tracker
+is a deterministic script — fetch, score a fixed signal, diff, commit — with no model in the
+loop, so paying Claude credit monthly would buy nothing. At the measured ~USD 43/session it
+would have exhausted the remaining USD 47 within two months. The Action is free.
+
+Three things about it worth knowing:
+
+- **A `schedule` trigger only fires for workflows on the repository's DEFAULT branch.** This
+  file lives on `main-grop3y`, so **the schedule will not run until it is merged into `main`**,
+  however correct it looks. `workflow_dispatch` works from any branch — use it to test first.
+- **`--years 5`, not the 20-year default.** The 2026-10-16 ranking was verified bit-identical on
+  both panels (the factors are point-in-time, so extra history cannot change them), and 5 years
+  is a 150s fetch against 221s and a 114 MB panel against 270 MB. The gated funnel is identical
+  (2,697 → 540); only the scorable count moves by two names, which are names that fail the
+  273-session floor either way.
+- **Re-running is a no-op, not a second row.** A repeat of the same `data_as_of` under the same
+  `signal_version` is the *same call*, so `tracker.run` detects the existing `run_id`, writes
+  nothing and leaves `latest_run.md` alone. Without that, a re-dispatch or a retry would put two
+  contradictory rows behind one `run_id` and corrupt every diff computed from the record
+  afterwards.
+
+### The one real risk, unmeasured
+
+The feed worked perfectly from this project's cloud container — 28,638 price requests across four
+sweeps with zero failures (`results/price_feed_probe.md`). **GitHub Actions runners are a
+different, heavily-used datacentre IP pool, and Yahoo is known to rate-limit those.** Whether the
+endpoint serves a GitHub runner is **not something this session could test**, and the first
+scheduled run is the experiment.
+
+It fails safely either way: `YahooChartFeed` makes one attempt per ticker, never retries through
+a throttle, and raises `FeedThrottledError` at five 429s, so a throttled run is a **red workflow
+run with nothing committed** rather than a ranking built on a half-fetched market. If it does get
+throttled, the fallbacks in order are: run `track` locally once a month (the panel fetch is the
+only part that needs the network), or pay for a scheduled Claude session, or buy a licensed feed
+(`feeds/sharadar.py`).
+
 ## 6. Cadence: monthly — measured, not assumed
 
 This was the one open question. It is now settled by measurement:
@@ -129,12 +172,16 @@ magnitude, is the binding constraint — and it is the reason the published t-st
 recovered research were inflated 3.4×.
 
 **Monthly review is not monthly trading**, and that distinction is what makes the cadence safe.
-A 3-month *holding* period would mean ~4× the turnover, and nothing in this project deducts
-commission, spread or tax (RECOVERY.md defect 4 is open), so the horizon test's gross figures
-cannot say that quarterly rebalancing beats annual net of costs — and it does not claim to. The
-exit rules fire on structural breaks rather than rank drift, so a listing stays a long-horizon
-thesis that gets *checked* often. The 24-month replay confirms the shape: 4–13 exits a month from
-a watchlist of 28–38, not wholesale rotation.
+The exit rules fire on structural breaks rather than rank drift, so a listing stays a
+long-horizon thesis that gets *checked* often. The 24-month replay confirms the shape: 4–13 exits
+a month from a watchlist of 28–38, not wholesale rotation.
+
+**The cost model now closes this loop, and it sharpens the point.** Measured turnover is
+**3.25×/yr** — an average holding period of 3.7 months, not 12 — and that costs 3× what a
+12-month hold costs: 21–40% of the gross excess against 8–16%. Net of costs the two cadences are
+a wash, so the 3-month horizon's higher gross excess buys nothing once paid for. Monthly review
+remains right; **the conservative exit rules are load-bearing, and loosening them would trade
+real money for noise.** See `results/cost_model.md` §5.
 
 Weekly is not supported: nothing measured speaks to horizons under 63 trading days, and the exit
 rules are built to ignore the rank noise a weekly cadence would surface.
@@ -164,6 +211,26 @@ but it changes what the record means, so it is recorded per run in `runs.csv`.
    `screen_v4.py`'s industry-momentum *overlay* stays omitted and `signal_version` still
    hashes `industry_overlay: false`, because turning it on would change the signal.
 
-5. **A cost model.** RECOVERY.md defect 4 is the last one still fully open, and it is the thing
-   that would let a net-of-cost question be answered at all — including whether the monthly
-   cadence's turnover is affordable (`results/horizon_test.md` §6 can only speak gross).
+5. ~~**A cost model.**~~ **Done** — `results/cost_model.md`. The answer changed a conclusion:
+   net of costs, the faster cadence wins nothing. The tracker's measured 3.25× turnover gives up
+   21–40% of its gross excess against 8–16% for a 12-month hold, and the 3-month horizon's
+   higher gross excess is almost exactly consumed by it. **Monthly review stays right, and the
+   conservative exit rules turn out to be load-bearing rather than merely defensible.**
+
+6. ~~**Survivorship is now the binding defect.**~~ **Bounded** — `results/survivorship.md`. It
+   dilutes the measured edge by 8.4% at the measured 7.71%/yr delisting rate, and would need a
+   rate above 78% to erase the post-cost edge. It remains structural, but it is no longer the
+   thing most likely to be wrong.
+
+7. ~~**C2 — the block bootstrap.**~~ **PASSED** — `results/c2_block_bootstrap.md`. p < 0.00005
+   at every block length and both horizons against a pre-registered bar of 0.10; the observed
+   mean IC exceeds the largest of 20,000 null maxima. So the ordering ability is **not** an
+   artefact of the search that produced the weight vector. It establishes that and no more: the
+   ~15 independent observations, the survivorship bias on IC (whose direction is not even
+   signable) and the 16–29% cost haircut all stand.
+
+8. **Elapsed time is now the binding constraint, and it is free.** All five credit packages are
+   discharged and USD 47 is unallocated. The forward tracking record is **one run long**, it is
+   the only unbiased dataset this project will own, and nothing substitutes for letting it
+   accumulate. **Sharadar (USD 199/yr) is now a reasonable purchase** — its condition was C2
+   passing — but it buys back the *past*, and the record buys the future for nothing.

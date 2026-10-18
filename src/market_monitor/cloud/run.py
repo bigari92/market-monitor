@@ -138,6 +138,16 @@ def cmd_track(args: argparse.Namespace) -> int:
         print(f"REFUSED: {exc}", flush=True)
         return 3
 
+    if result.already_recorded:
+        # Idempotent no-op. Do NOT re-render latest_run.md: the stored report describes the
+        # run that was actually recorded, and regenerating it here would overwrite a real
+        # report ("25 entered") with an empty one ("None entered this run"), because this
+        # path has no diff to report. An automated monthly job gets re-dispatched, so this is
+        # a routine path, not an edge case.
+        print(f"run {result.run_id} is already in the record — nothing written, nothing "
+              f"changed. The stored report is results/tracking/latest_run.md.", flush=True)
+        return 0
+
     report = tracker.render_report(result, diagnostics)
     if not args.dry_run:
         (RESULTS / "tracking").mkdir(parents=True, exist_ok=True)
@@ -347,6 +357,146 @@ def cmd_modes(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cost(args: argparse.Namespace) -> int:
+    """Execution cost for the strategy as configured. RECOVERY.md defect 4.
+
+    Needs a panel with high/low (the spread estimators reconstruct a spread from the daily
+    range), and the replay record for measured turnover.
+    """
+    from . import cost as C
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    C.require_high_low(bars)
+    as_of = _data_as_of(bars)
+    factor_frame = F.compute_factors(bars.close[keep], bars.volume[keep], as_of,
+                                     adjclose=bars.adjclose[keep])
+    gated = signal.score(factor_frame)
+    top = gated.head(signal.TOP_N)
+
+    print(f"\nspread by group (bps, {C.DEFAULT_WINDOW}d window):", flush=True)
+    for label, tickers in (("whole scorable universe", list(factor_frame.index)),
+                           ("after price + liquidity floors",
+                            list(signal.apply_gates(factor_frame, vol_gate=None).index)),
+                           ("gated cohort (ranked)", list(gated.index)),
+                           ("top N (bought)", list(top.index))):
+        est = C.spread_estimates(bars, as_of, tickers)
+        print(f"  {label:34s} n={len(est):5d}  CS={est['cs_bps'].median():6.1f}  "
+              f"AR={est['ar_bps'].median():6.1f}  used={est['used_bps'].median():6.1f}",
+              flush=True)
+
+    spread = float(C.spread_estimates(bars, as_of, list(top.index))["used_bps"].median())
+    daily_vol = float(top["vol_12m"].median() / (252 ** 0.5))
+
+    replay_runs = RESULTS / "replay" / "runs.csv"
+    turnover = C.measure_turnover(pd.read_csv(replay_runs)) if replay_runs.exists() else {}
+    annual_turnover = turnover.get("annual_turnover", 1.0)
+    print(f"\nturnover, measured: {json.dumps(turnover)}", flush=True)
+
+    schedule = C.CommissionSchedule()
+    rows = []
+    for portfolio in (10_000, 50_000, 250_000, 1_000_000):
+        one_way = C.commission_bps_for_portfolio(top["price"], portfolio, signal.TOP_N,
+                                                 schedule)
+        impact = C.impact_bps(portfolio / signal.TOP_N, top["adv_3m_usd"], daily_vol)
+        round_trip = C.round_trip_bps(one_way, spread, impact)
+        rows.append({"portfolio_usd": portfolio, "commission_1way_bps": one_way,
+                     "spread_bps": spread, "impact_1way_bps": impact,
+                     "round_trip_bps": round_trip,
+                     "drag_at_1x_pp": C.annual_drag_bps(round_trip, 1.0) / 100,
+                     "drag_at_measured_turnover_pp":
+                         C.annual_drag_bps(round_trip, annual_turnover) / 100})
+    print(f"\ncost by portfolio size (turnover {annual_turnover}x):", flush=True)
+    print(pd.DataFrame(rows).round(2).to_string(index=False), flush=True)
+
+    print("\nbreak-even round-trip cost (bps), independent of any spread estimate:", flush=True)
+    for label, turn, gross in (("12-month hold", 1.0, 11.875),
+                               ("as configured", annual_turnover, 15.31)):
+        print(f"  {label:16s} turnover {turn:5.2f}x  gross {gross:5.2f}pp  "
+              f"break-even {C.break_even_cost_bps(gross, turn):7.1f} bps", flush=True)
+
+    print("\n" + C.TAX_IS_OUT_OF_SCOPE, flush=True)
+    print("\nThe written verdict is results/cost_model.md.", flush=True)
+    return 0
+
+
+def cmd_survivorship(args: argparse.Namespace) -> int:
+    """The survivorship bound and the delisting rate. RECOVERY.md defect 1, bounded not fixed."""
+    from . import survivorship as S
+
+    census = SEC_DIR.parent / "sec_delist" / "form25.parquet"
+    if not census.exists():
+        print(f"no Form 25 census at {census}; see results/survivorship.md §7", flush=True)
+        return 1
+    form25 = pd.read_parquet(census)
+
+    uni, bars, stats, keep = _load(args.feed, args.years, args.refresh, args.limit)
+    live = set(uni["cik"].dropna().astype(int))
+    ticker_path = census.parent / "f25_ticker_present.parquet"
+    ticker_present = (pd.read_parquet(ticker_path)["ticker_present"].to_dict()
+                      if ticker_path.exists() else None)
+
+    rate = S.delisting_rate(form25, live, ticker_present, universe_size=len(uni))
+    print(f"\nForm 25: {len(form25):,} filings, {form25['cik'].nunique():,} distinct CIKs",
+          flush=True)
+    print(rate.to_string(index=False), flush=True)
+
+    core = rate[(rate["year"] >= 2010) & (rate["year"] <= 2025)]
+    f = float(core["rate_gone_%"].median()) / 100
+    print(f"\nmedian strict delisting rate 2010-2025: {100 * f:.2f}%", flush=True)
+
+    # The measured inputs from results/horizon_test.md, at the validated 12-month horizon.
+    print(f"\nC3 bound at f = {100 * f:.2f}%:", flush=True)
+    print(S.bound_table(11.875, 12.16, f).to_string(index=False), flush=True)
+
+    print("\nsensitivity (the gated cohort delists faster than the universe, by an "
+          "unmeasurable margin):", flush=True)
+    rows = [{"f": rate_, **{k: v for k, v in
+                            S.bound_excess(11.875, 12.16, rate_, "severe").as_row().items()
+                            if k in ("pessimistic_pp", "overstatement_x")}}
+            for rate_ in (f, 0.10, 0.15, 0.20, 0.25, 0.33)]
+    print(pd.DataFrame(rows).round(3).to_string(index=False), flush=True)
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    rate.to_csv(RESULTS / "survivorship_delisting_rate.csv", index=False)
+    print("\nThe written verdict, including the Sharadar decision, is "
+          "results/survivorship.md.", flush=True)
+    return 0
+
+
+def cmd_c2(args: argparse.Namespace) -> int:
+    """C2 — the block bootstrap kill gate. Reads the pre-registered threshold, never sets it.
+
+    Needs the per-date IC series written by the C2 run (results/c2_ic_by_date_12m.csv). The
+    verdict belongs to whatever the number says: a FAIL means the prediction half ends, and
+    looking for a variant that passes is the exact search this gate exists to penalise.
+    """
+    from . import bootstrap as B
+
+    path = RESULTS / "c2_ic_by_date_12m.csv"
+    if not path.exists():
+        print(f"no IC series at {path}; see results/c2_block_bootstrap.md §7", flush=True)
+        return 1
+    ic = pd.read_csv(path, index_col=0)
+
+    trials = B.reconstructed_trial_count()
+    print(f"reconstructed trial count (documented floor): {trials['documented_total']}",
+          flush=True)
+    print(f"candidate configurations in the check: {ic.shape[1]}", flush=True)
+    print(f"\npre-registered kill condition: p > {B.KILL_THRESHOLD:.2f} ends the prediction half",
+          flush=True)
+
+    for block in (6, 12, 24):
+        rc = B.reality_check(ic, block_length=block, n_resamples=B.DEFAULT_RESAMPLES,
+                             focus="m:price")
+        print(f"  block={block:2d}  best={rc.best_config:24s}  p_single={rc.p_single_config:.4f}"
+              f"  p_RC={rc.p_reality_check:.4f}", flush=True)
+        if block == 12:
+            print(f"\n  {rc.verdict()}", flush=True)
+
+    print("\nThe written verdict is results/c2_block_bootstrap.md.", flush=True)
+    return 0
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """Re-measure the feed. The committed measurement is results/price_feed_probe.md."""
     uni = universe.build_universe()
@@ -406,6 +556,19 @@ def main(argv: list[str] | None = None) -> int:
         "modes", help="measure the 4 pre-specified algo_v4 configs (does NOT change the signal)")
     modes.add_argument("--refresh", action="store_true")
     modes.set_defaults(func=cmd_modes)
+
+    cost_cmd = sub.add_parser(
+        "cost", help="execution cost: spread, commission, impact, measured turnover")
+    cost_cmd.add_argument("--refresh", action="store_true")
+    cost_cmd.set_defaults(func=cmd_cost)
+
+    surv = sub.add_parser(
+        "survivorship", help="delisting rate and the C3 survivorship bound")
+    surv.add_argument("--refresh", action="store_true")
+    surv.set_defaults(func=cmd_survivorship)
+
+    c2 = sub.add_parser("c2", help="the block bootstrap kill gate (C2)")
+    c2.set_defaults(func=cmd_c2, refresh=False)
 
     probe = sub.add_parser("probe", help="re-measure the feed")
     probe.set_defaults(func=cmd_probe, refresh=True)

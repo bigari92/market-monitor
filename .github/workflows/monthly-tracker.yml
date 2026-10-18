@@ -1,0 +1,105 @@
+# The monthly tracker run.
+#
+# Deliberately a GitHub Action and not a Claude scheduled session. The tracker is a
+# deterministic script: it fetches prices, scores a fixed signal, diffs against the record and
+# commits. No model is involved, so paying Claude credit every month to run it would buy
+# nothing — and at the measured ~USD 43/session it would have exhausted the remaining USD 47
+# within two months. This runs for free.
+#
+# IMPORTANT: a `schedule` trigger only fires for workflows on the repository's DEFAULT branch.
+# Until this file is merged into `main` the schedule will NOT run, however correct it looks.
+# `workflow_dispatch` works from any branch, so use that to test it first.
+
+name: monthly tracker
+
+on:
+  schedule:
+    # 06:17 UTC on the 1st — after the previous month's final US close has settled, so the
+    # panel's last session is that month end. Minute 17 rather than 00 because GitHub delays
+    # scheduled jobs that pile up on the hour.
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Score and report without writing to the record'
+        type: boolean
+        default: false
+
+# Needed to push the appended record back. Nothing else is granted.
+permissions:
+  contents: write
+
+concurrency:
+  # Never let two runs append to an append-only record at once.
+  group: monthly-tracker
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The record is appended to and pushed, so the checkout must be writable and current.
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-cloud.txt
+
+      - name: Install the cloud dependencies
+        run: pip install -r requirements-cloud.txt
+
+      - name: Run the test suite
+        # Before touching the record, not after. A broken build must not append a row that a
+        # later run will diff against — the record is append-only, so a bad row is permanent.
+        run: python -m pytest -q
+        env:
+          PYTHONPATH: src
+
+      - name: Run the tracker
+        # --years 5 rather than the 20-year default: the 2026-10-16 ranking was verified
+        # bit-identical on both panels (the factors are point-in-time, so extra history cannot
+        # change them), and 5 years is a 150s fetch and a 114 MB panel instead of 221s and
+        # 270 MB. The run fails loudly on a throttle (FeedThrottledError) or a thin
+        # cross-section (RefusedToRank) rather than committing a half-market ranking.
+        run: |
+          python -m market_monitor.cloud.run --years 5 track \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          PYTHONPATH: src
+
+      - name: Commit the appended record
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name  'market-monitor tracker'
+          git config user.email 'noreply@github.com'
+          # results/ only. data/ is gitignored and must stay that way — a full panel is
+          # hundreds of MB and GitHub rejects it.
+          git add -- results/tracking
+          if git diff --cached --quiet; then
+            echo 'No change to the record — the run was already recorded for this as_of.'
+            exit 0
+          fi
+          AS_OF=$(python -c "import csv,sys; rows=list(csv.DictReader(open('results/tracking/runs.csv'))); print(rows[-1]['data_as_of'])")
+          git commit -m "Tracker run, data_as_of ${AS_OF}
+
+          Automated monthly run. The ranking, the exits and the diff against the previous
+          run are in results/tracking/; the signal definition is unchanged and hashed into
+          each row's signal_version."
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Surface the run report
+        if: always()
+        run: |
+          echo '### Tracker run' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f results/tracking/latest_run.md ]; then
+            cat results/tracking/latest_run.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No report produced — the run failed before scoring. See the log above.' >> "$GITHUB_STEP_SUMMARY"
+          fi
