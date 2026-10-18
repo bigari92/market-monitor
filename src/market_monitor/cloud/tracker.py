@@ -84,7 +84,7 @@ EXIT_REASONS = {
     "LEFT_VOL_GATE": "no longer in the volatility cohort the asymmetry result applies to",
     "TREND_BREAK": "price closed below its 200-day average",
     "RANK_DECAY": "rank decayed past the carry buffer",
-    "NO_LONGER_PRICED": "absent from the panel (delisted, renamed, or a feed gap)",
+    "NO_LONGER_PRICED": "absent from the panel entirely (delisted, renamed, or a feed gap)",
 }
 
 
@@ -134,23 +134,76 @@ def current_watchlist(listings: pd.DataFrame) -> pd.DataFrame:
     return listings[listings["run_id"] == last_run].copy()
 
 
-def classify_exit(row: pd.Series, ranked: pd.DataFrame, top_n: int) -> tuple[str, str] | None:
+def classify_exit(previous: pd.Series, ranked: pd.DataFrame, top_n: int,
+                  universe: pd.DataFrame | None = None) -> tuple[str, str] | None:
     """Why a previously-listed name should leave, or None to keep holding it.
 
-    Rules are evaluated structural-break-first so the recorded reason is the most informative
+    `previous` is that name's row from the last run, so a rule can compare state against state.
+    `ranked` is the scored, gated cross-section. `universe` is the *ungated* factor frame, and
+    passing it is what lets the reason be accurate rather than merely true.
+
+    Rules are evaluated structural-break-first, so the recorded reason is the most informative
     one: a name that broke trend *and* decayed in rank is recorded as a trend break.
+
+    ## Why `universe` is needed: the reason code was lying
+
+    A 24-month replay reported `NO_LONGER_PRICED` 0-6 times a month over a panel containing only
+    names that survived to today, where a genuine delisting is nearly impossible. Meanwhile
+    `LEFT_VOL_GATE` never fired once. Both had the same cause: `apply_gates` removes a name
+    before `classify_exit` ever sees it, so absence from `ranked` was being read as absence from
+    the market.
+
+    They are entirely different signals to act on. "Delisted" is terminal; "no longer in the
+    volatility cohort the asymmetry result was measured on" means the name has calmed down and
+    the evidence simply no longer covers it. Reporting the second as the first would make the
+    exit log useless for the one thing it exists for.
+
+    With `universe` in hand the absence is attributable: not in the panel at all, present but
+    below a hard floor, or present and solvent but outside the gate.
+
+    ## Why TREND_BREAK needs the previous row
+
+    The first live run ranked TER at #1 with `px_vs_ma200` at -0.057 — already below its 200-day
+    average, because `days_above_ma200` (0.99, one of the eight weighted terms) measures the
+    *year*, while `px_vs_ma200` (not a weighted term at all) measures *today*. A rule that fired
+    on the level alone would therefore have entered TER and exited it one run later, which is not
+    a signal disagreeing with itself so much as a badly posed rule: nothing *broke*.
+
+    A break is a transition. TREND_BREAK fires only when the name was at or above its 200-day
+    average at the previous run and is below it now. A name that was already below when listed
+    has no trend to break, and its deterioration is RANK_DECAY's business.
+
+    The alternative — filtering such names out at entry — was rejected: it would add a criterion
+    the composite does not have, and CLOUD-RULES.md §5 does not allow a session to change the
+    signal. Fixing the new exit rule is in scope; changing the validated entry rule is not.
     """
-    ticker = row["ticker"]
+    ticker = previous["ticker"]
     if ticker not in ranked.index:
-        return "NO_LONGER_PRICED", "not present in this run's gated cross-section"
+        # Attribute the absence rather than assuming the worst reading of it.
+        if universe is None or ticker not in universe.index:
+            return "NO_LONGER_PRICED", "absent from the panel entirely"
+        row = universe.loc[ticker]
+        if pd.isna(row.get("price")) or row["price"] < sig.MIN_PRICE:
+            return "GATE_FAIL_PRICE", f"price {row['price']:.2f} < {sig.MIN_PRICE}"
+        if pd.isna(row.get("adv_3m_usd")) or row["adv_3m_usd"] < sig.MIN_ADV:
+            return "GATE_FAIL_LIQUIDITY", (f"ADV {row['adv_3m_usd']:,.0f} < "
+                                           f"{sig.MIN_ADV:,.0f}")
+        return "LEFT_VOL_GATE", (
+            f"12m volatility {row['vol_12m']:.2f} is outside the gate {sig.VOL_GATE}; still "
+            "priced and liquid, but no longer in the cohort the asymmetry result covers")
 
     now = ranked.loc[ticker]
     if now["price"] < sig.MIN_PRICE:
         return "GATE_FAIL_PRICE", f"price {now['price']:.2f} < {sig.MIN_PRICE}"
     if now["adv_3m_usd"] < sig.MIN_ADV:
         return "GATE_FAIL_LIQUIDITY", f"ADV {now['adv_3m_usd']:,.0f} < {sig.MIN_ADV:,.0f}"
-    if now["px_vs_ma200"] < 0:
-        return "TREND_BREAK", f"price {100 * now['px_vs_ma200']:+.1f}% vs its 200-day average"
+
+    was_above = previous.get("px_vs_ma200")
+    was_above = True if pd.isna(was_above) else float(was_above) >= 0
+    if was_above and now["px_vs_ma200"] < 0:
+        return "TREND_BREAK", (f"price {100 * now['px_vs_ma200']:+.1f}% vs its 200-day average, "
+                               f"having been above it at the previous run")
+
     buffer_rank = top_n * RANK_DECAY_MULTIPLE
     if now["rank"] > buffer_rank:
         return "RANK_DECAY", f"rank {int(now['rank'])} past the carry buffer of {buffer_rank}"
@@ -202,10 +255,12 @@ def run(factors: pd.DataFrame, data_as_of: str, feed_name: str,
         prior_rank: dict[str, int] = {}
         prior_score: dict[str, float] = {}
         first_seen: dict[str, str] = {}
+        prior_rows: dict[str, pd.Series] = {}
     else:
         prior_rank = dict(zip(previous["ticker"], previous["rank"]))
         prior_score = dict(zip(previous["ticker"], previous["score"]))
         first_seen = dict(zip(previous["ticker"], previous["first_listed_as_of"]))
+        prior_rows = {row["ticker"]: row for _, row in previous.iterrows()}
 
     held_before = list(prior_rank)
     top_now = list(ranked.index[:top_n])
@@ -214,7 +269,9 @@ def run(factors: pd.DataFrame, data_as_of: str, feed_name: str,
     exits: list[dict] = []
     holds: list[str] = []
     for ticker in held_before:
-        verdict = classify_exit(pd.Series({"ticker": ticker}), ranked, top_n)
+        # The previous row, so a break can be judged as a transition rather than a level.
+        prior = prior_rows.get(ticker, pd.Series({"ticker": ticker}))
+        verdict = classify_exit(prior, ranked, top_n, universe=factors)
         if verdict is None:
             holds.append(ticker)
             continue

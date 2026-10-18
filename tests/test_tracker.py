@@ -99,6 +99,38 @@ def test_trend_break_exits_on_a_zero_crossing_not_a_fitted_level(tmp_path):
     assert exits.loc[listed[0], "reason_code"] == "TREND_BREAK"
 
 
+def test_trend_break_is_a_transition_and_not_a_level(tmp_path):
+    """The bug the first live run exposed. TER ranked #1 with px_vs_ma200 at -0.057: already
+    below its 200-day average, because `days_above_ma200` (a weighted term) measures the year
+    while `px_vs_ma200` (not a weighted term) measures today. A level rule would have entered
+    it and exited it one run later. Nothing broke, so nothing should fire."""
+    factors = cross_section(seed=5)
+    factors["px_vs_ma200"] = -0.05          # the whole cohort sits below its 200-day average
+
+    run_one = tracker.run(factors, "2026-10-16", "test_feed", tracking_dir=tmp_path)
+    assert len(run_one.buys) == sig.TOP_N, "entry must not acquire a criterion the signal lacks"
+
+    run_two = tracker.run(factors, "2026-11-16", "test_feed", tracking_dir=tmp_path)
+    trend_breaks = run_two.exits[run_two.exits["reason_code"] == "TREND_BREAK"] \
+        if not run_two.exits.empty else pd.DataFrame()
+    assert trend_breaks.empty, "a name already below its MA at listing has no trend to break"
+    assert len(run_two.holds) == sig.TOP_N
+
+
+def test_trend_break_fires_on_the_crossing_itself(tmp_path):
+    """The other half: above at listing, below now, is a break and must fire."""
+    above = cross_section(seed=5)
+    above["px_vs_ma200"] = 0.10
+    tracker.run(above, "2026-10-16", "test_feed", tracking_dir=tmp_path)
+
+    below = above.copy()
+    below["px_vs_ma200"] = -0.02
+    run_two = tracker.run(below, "2026-11-16", "test_feed", tracking_dir=tmp_path)
+    assert not run_two.exits.empty
+    assert (run_two.exits["reason_code"] == "TREND_BREAK").all()
+    assert "having been above it at the previous run" in run_two.exits.iloc[0]["detail"]
+
+
 def test_gate_failure_on_price_uses_the_signal_constant(tmp_path):
     def crash(frame, listed):
         f = frame.copy()
@@ -120,6 +152,47 @@ def test_a_delisted_name_exits_as_no_longer_priced(tmp_path):
     listed, run_two = _list_then(tmp_path, delist)
     exits = run_two.exits.set_index("ticker")
     assert exits.loc[listed[0], "reason_code"] == "NO_LONGER_PRICED"
+
+
+def test_leaving_the_volatility_gate_is_not_reported_as_delisting(tmp_path):
+    """The bug a 24-month replay exposed: `NO_LONGER_PRICED` fired 0-6 times a month over a
+    panel of names that all survived to today, while `LEFT_VOL_GATE` never fired at all. Both
+    came from reading absence-from-`ranked` as absence-from-the-market.
+
+    The two are entirely different signals. 'Delisted' is terminal; 'calmed down and left the
+    cohort the asymmetry result was measured on' is not. Conflating them makes the exit log
+    useless for the only thing it is for."""
+    def calm_down(frame, listed):
+        f = frame.copy()
+        f.loc[listed[0], "vol_12m"] = 0.01   # still priced and liquid, now the calmest name
+        return f
+
+    listed, run_two = _list_then(tmp_path, calm_down)
+    exits = run_two.exits.set_index("ticker")
+    assert exits.loc[listed[0], "reason_code"] == "LEFT_VOL_GATE"
+    assert "still\npriced and liquid" in exits.loc[listed[0], "detail"].replace(" ", "\n", 100) \
+        or "still priced and liquid" in exits.loc[listed[0], "detail"]
+
+
+def test_an_illiquid_name_exits_as_a_liquidity_failure_not_a_delisting(tmp_path):
+    """Dropping below the ADV floor removes a name from the ranking too, and it must be
+    attributed to the floor it actually failed."""
+    def dry_up(frame, listed):
+        f = frame.copy()
+        f.loc[listed[0], "adv_3m_usd"] = sig.MIN_ADV / 10
+        return f
+
+    listed, run_two = _list_then(tmp_path, dry_up)
+    exits = run_two.exits.set_index("ticker")
+    assert exits.loc[listed[0], "reason_code"] == "GATE_FAIL_LIQUIDITY"
+
+
+def test_every_exit_reason_is_reachable():
+    """A reason code that cannot fire is a code that misreports something else as itself —
+    which is exactly how LEFT_VOL_GATE's absence hid as NO_LONGER_PRICED."""
+    reachable = {"GATE_FAIL_PRICE", "GATE_FAIL_LIQUIDITY", "LEFT_VOL_GATE",
+                 "TREND_BREAK", "RANK_DECAY", "NO_LONGER_PRICED"}
+    assert set(tracker.EXIT_REASONS) == reachable
 
 
 def test_rank_drift_inside_the_buffer_is_held_not_exited(tmp_path):
@@ -144,11 +217,13 @@ def test_rank_decay_exits_only_past_the_declared_buffer(tmp_path):
     buffer_rank = sig.TOP_N * tracker.RANK_DECAY_MULTIPLE
 
     ranked = sig.score(cross_section(seed=5))
-    inside = pd.Series({"ticker": ranked.index[buffer_rank - 2]})
-    outside_index = ranked.index[buffer_rank + 5]
+    # A previous row showing the name above its 200-day average, so TREND_BREAK cannot mask
+    # what this test is about.
+    def prior(ticker):
+        return pd.Series({"ticker": ticker, "px_vs_ma200": 0.10})
 
-    assert tracker.classify_exit(inside, ranked, sig.TOP_N) is None
-    code, _ = tracker.classify_exit(pd.Series({"ticker": outside_index}), ranked, sig.TOP_N)
+    assert tracker.classify_exit(prior(ranked.index[buffer_rank - 2]), ranked, sig.TOP_N) is None
+    code, _ = tracker.classify_exit(prior(ranked.index[buffer_rank + 5]), ranked, sig.TOP_N)
     assert code in {"RANK_DECAY", "TREND_BREAK"}
 
 
