@@ -18,9 +18,9 @@
   ],
   "top_n": 25,
   "mode": "price_only",
+  "never_emitted": "probability, expected return, or any performance figure",
   "omitted": [
-    "fundamental_block (SEC datasets not built)",
+    "fundamental_block (ported in signal.FUND_W; NOT scored \u2014 screen_v4.py ran price-only because fundamentals 'did not improve selection')",
     "industry_overlay (nasdaq screener unavailable from cloud)"
-  ],
-  "never_emitted": "probability, expected return, or any performance figure"
+  ]
 }
